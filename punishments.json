@@ -1,0 +1,256 @@
+{
+  "guilds": {
+    "1439666122881241291": {
+      "users": {
+        "1035868648063127582": {
+          "warns": [
+            {
+              "timestamp": 1773586897618,
+              "reason": "тест п.1",
+              "moderatorId": "845208027145568287",
+              "moderatorTag": "hellomyname332211"
+            }
+          ],
+          "banLevel": 1
+        },
+        "941764578772144229": {
+          "warns": [],
+          "bans": [],
+          "banLevel": 0
+        },
+        "1107726554173296650": {
+          "warns": [
+            {
+              "timestamp": 1764515061283,
+              "reason": "Тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            }
+          ],
+          "bans": [],
+          "banLevel": 0
+        },
+        "845208027145568287": {
+          "warns": [
+            {
+              "timestamp": 1773598083245,
+              "reason": "1",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773598094195,
+              "reason": "Причина не указана",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773598099164,
+              "reason": "Причина не указана",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773598103486,
+              "reason": "Причина не указана",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773598107468,
+              "reason": "Причина не указана",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773598111498,
+              "reason": "Причина не указана",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            }
+          ],
+          "bans": [
+            {
+              "timestamp": 1773590595759,
+              "durationMs": 86400000,
+              "reason": "Набрано 6 активных предупреждений (уровень бана 1, 1d)",
+              "moderatorId": "1035868648063127582",
+              "moderatorTag": "olegg6951"
+            },
+            {
+              "timestamp": 1773592902136,
+              "durationMs": 259200000,
+              "reason": "Набрано 6 активных предупреждений (уровень бана 2, 3d)",
+              "moderatorId": "1035868648063127582",
+              "moderatorTag": "olegg6951"
+            },
+            {
+              "timestamp": 1773596232471,
+              "durationMs": 604800000,
+              "reason": "Набрано 6 активных предупреждений (уровень бана 3, 7d)",
+              "moderatorId": "1035868648063127582",
+              "moderatorTag": "olegg6951"
+            },
+            {
+              "timestamp": 1773596476068,
+              "durationMs": null,
+              "reason": "Отправка сторонней ссылки",
+              "moderatorId": "1439759568992211157",
+              "moderatorTag": "StreetLife Bot#7306"
+            },
+            {
+              "timestamp": 1773598111815,
+              "durationMs": 1209600000,
+              "reason": "Набрано 6 активных предупреждений (уровень бана 4, 14d)",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773601691328,
+              "durationMs": null,
+              "reason": "Отправка сторонней ссылки",
+              "moderatorId": "1439759568992211157",
+              "moderatorTag": "StreetLife Bot#7306"
+            },
+            {
+              "timestamp": 1773601817152,
+              "durationMs": null,
+              "reason": "3\nтест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773601928449,
+              "durationMs": null,
+              "reason": "3\nтест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773602678532,
+              "durationMs": 259200000,
+              "reason": "тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773602732303,
+              "durationMs": null,
+              "reason": "Причина не указана",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773605555126,
+              "durationMs": 4233600000,
+              "reason": "тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773606135033,
+              "durationMs": null,
+              "reason": "49 тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773606216317,
+              "durationMs": null,
+              "reason": "49 Тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773606255584,
+              "durationMs": 4233600000,
+              "reason": "тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773608733012,
+              "durationMs": 4233600000,
+              "reason": "тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773610494889,
+              "durationMs": null,
+              "reason": "Причина не указана",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773610945298,
+              "durationMs": null,
+              "reason": "Причина не указана",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773611145096,
+              "durationMs": 5184000000,
+              "reason": "Тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773612056572,
+              "durationMs": 5184000000,
+              "reason": "Тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773612210403,
+              "durationMs": 5184000000,
+              "reason": "Тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773612484158,
+              "durationMs": 5184000000,
+              "reason": "Тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773612606154,
+              "durationMs": 10368000000,
+              "reason": "Тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773614298141,
+              "durationMs": 300000,
+              "reason": "Тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773689159359,
+              "durationMs": 432000000,
+              "reason": "тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            },
+            {
+              "timestamp": 1773689224421,
+              "durationMs": 300000,
+              "reason": "тест",
+              "moderatorId": "941764578772144229",
+              "moderatorTag": "michael_2024_pro"
+            }
+          ],
+          "banLevel": 4,
+          "clearTimeoutOnJoin": false
+        }
+      },
+      "timedUnbans": {}
+    }
+  }
+}

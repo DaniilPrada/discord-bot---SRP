@@ -1,0 +1,24 @@
+{
+  "name": "streetlifebot",
+  "version": "1.0.0",
+  "description": "StreetLife RP — RU Discord Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.19.1",
+    "@snazzah/davey": "^0.1.8",
+    "better-sqlite3": "^12.8.0",
+    "canvas": "^3.2.1",
+    "cheerio": "^1.2.0",
+    "discord.js": "^14.25.1",
+    "dotenv": "^16.6.1",
+    "ffmpeg-static": "^5.3.0",
+    "ms": "^2.1.3",
+    "prism-media": "^1.3.5",
+    "sqlite3": "^5.1.7",
+    "yt-dlp-wrap": "^2.3.12"
+  }
+}
