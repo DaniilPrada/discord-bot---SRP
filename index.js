@@ -1117,30 +1117,6 @@ async function resolveUserForNews(guild, input, fallbackUser) {
   return fallbackUser;
 }
 
-function buildNewsEmbed(user, text) {
-  const avatarURL = user.displayAvatarURL({
-    extension: "png",
-    size: 256,
-  });
-
-  const dt = formatUpdateDateTime();
-
-  return new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setAuthor({
-      name: `Обновление от ${user.globalName || user.username}`,
-      iconURL: avatarURL,
-    })
-    .setDescription(String(text || "").trim().slice(0, 4000))
-    .setThumbnail(avatarURL)
-    .setImage(WELCOME_IMAGE_URL)
-    .setFooter({
-      text: `${dt.date} • ${dt.time}`,
-      iconURL: avatarURL,
-    })
-    .setTimestamp();
-}
-
 
 // =============================
 // Warn logic / auto punish
@@ -2303,45 +2279,19 @@ async function recountAllMessagesInGuild(guild) {
 }
 
 
-
 function buildNewsEmbed(user, text) {
-  const safeText = String(text || "").trim();
+  const safeText = String(text || "").trim().slice(0, 3500);
+  const dt = formatUpdateDateTime();
 
-  const avatarURL = user?.displayAvatarURL
-    ? user.displayAvatarURL({ extension: "png", size: 256 })
-    : null;
-
-  const now = new Date();
-  const dateText = now.toLocaleDateString("ru-RU");
-  const timeText = now.toLocaleTimeString("ru-RU", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-
-  const embed = new EmbedBuilder()
+  return new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle("📢 Обновление")
-    .setDescription(safeText)
-    .setTimestamp()
+    .setDescription(`## ${safeText}`)
+    .setImage(WELCOME_IMAGE_URL)
     .setFooter({
-      text: `Дата: ${dateText} • Время: ${timeText}`,
+      text: `Доложил: ${user?.globalName || user?.username || "Unknown User"} • ${dt.date} ${dt.time}`,
     });
-
-  if (user) {
-    embed.setAuthor({
-      name: user.globalName || user.username || "Unknown User",
-      iconURL: avatarURL || undefined,
-    });
-
-    if (avatarURL) {
-      embed.setThumbnail(avatarURL);
-    }
-  }
-
-  return embed;
 }
-
 
 // =============================
 // Messages / Commands
