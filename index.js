@@ -2367,6 +2367,48 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
+  if (command === "n") {
+    if (!moderator) {
+      return message.reply("❌ У вас нет прав для этой команды.");
+    }
+
+    if (args.length === 0) {
+      return message.reply(
+        "❗ Использование:\n`!n <текст>`\nили\n`!n <UserID> <текст>`"
+      );
+    }
+
+    let targetUser = message.author;
+    let text = "";
+
+    const firstArg = args[0];
+    const looksLikeUserId = /^\d{16,22}$/.test(firstArg);
+
+    if (looksLikeUserId) {
+      const fetchedUser = await client.users.fetch(firstArg).catch(() => null);
+
+      if (!fetchedUser) {
+        return message.reply("❌ Пользователь по указанному ID не найден.");
+      }
+
+      targetUser = fetchedUser;
+      text = args.slice(1).join(" ").trim();
+    } else {
+      text = args.join(" ").trim();
+    }
+
+    if (!text) {
+      return message.reply("❌ Укажите текст для обновления.");
+    }
+
+    const embed = buildNewsEmbed(targetUser, text);
+
+    await message.delete().catch(() => {});
+    await message.channel.send({ embeds: [embed] });
+    return;
+  }
+
+
   if (command === "rank") {
     let member = message.member;
 
@@ -3783,6 +3825,9 @@ client.on("messageCreate", async (message) => {
       "`!sendloginfo` – отправить тестовую информацию о логах\n" +
       "`!sendallowlistpanel` – отправить панель allowlist с кнопкой\n" +
       "`!прошел проверку @User` – выдать доступ после проверки\n\n" +
+"`!n <текст>` – отправить обновление от своего имени\n" +
+"`!n <UserID> <текст>` – отправить обновление от имени другого пользователя по ID\n" +
+
 
       "— Ранги и статистика:\n" +
       "`!rank` – показать свою карточку ранга\n" +
