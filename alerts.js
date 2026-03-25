@@ -19,9 +19,18 @@ const UKRAINE_ALARMMAP_URL = "https://alarmmap.online/air/";
 
 // Prevent duplicate sends while the bot is running
 const sentAlertIds = new Set();
+const sentAlertOrder = [];
+const MAX_SENT_ALERT_IDS = 3000;
 
 // Small cache helpers for If-Modified-Since
 let israelLastModified = null;
+
+// Prevent overlapping checks
+let isCheckingAlerts = false;
+let alertsLoopStarted = false;
+
+// Active alerts snapshot for start/end detection
+const activeAlertsSnapshot = new Map();
 
 function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -29,6 +38,21 @@ function normalizeText(value) {
 
 function uniqueStrings(arr) {
   return [...new Set((arr || []).map((v) => normalizeText(v)).filter(Boolean))];
+}
+
+function rememberSentAlertId(alertId) {
+  if (!alertId) return;
+  if (sentAlertIds.has(alertId)) return;
+
+  sentAlertIds.add(alertId);
+  sentAlertOrder.push(alertId);
+
+  while (sentAlertOrder.length > MAX_SENT_ALERT_IDS) {
+    const oldestId = sentAlertOrder.shift();
+    if (oldestId) {
+      sentAlertIds.delete(oldestId);
+    }
+  }
 }
 
 function getAlertsChannel(guild) {
@@ -57,314 +81,220 @@ function filterAreasByAllowlist(areas, allowlist) {
   );
 }
 
+function lowerText(value) {
+  return normalizeText(value).toLowerCase();
+}
+
 function resolveIsraelAlertType(item) {
-  return (
-    normalizeText(item?.title) ||
-    normalizeText(item?.category) ||
-    normalizeText(item?.alertType) ||
-    normalizeText(item?.type) ||
-    normalizeText(item?.threat) ||
-    "Цева Адом"
+  const values = [
+    item?.title,
+    item?.category,
+    item?.alertType,
+    item?.type,
+    item?.threat,
+    item?.notificationType,
+    item?.event,
+    item?.desc,
+  ]
+    .map((v) => normalizeText(v))
+    .filter(Boolean);
+
+  const joined = values.join(" | ");
+  const text = lowerText(joined);
+
+  if (!text) {
+    return "Цева Адом";
+  }
+
+  if (
+    text.includes("חדירת כלי טיס עוין") ||
+    text.includes("כלי טיס עוין") ||
+    text.includes("uav") ||
+    text.includes("drone")
+  ) {
+    return "Проникновение вражеского БПЛА";
+  }
+
+  if (
+    text.includes("חדירת מחבלים") ||
+    text.includes("חדירה") ||
+    text.includes("infiltration")
+  ) {
+    return "Проникновение террористов";
+  }
+
+  if (
+    text.includes("ירי רקטות וטילים") ||
+    text.includes("רקטות") ||
+    text.includes("טילים") ||
+    text.includes("rocket") ||
+    text.includes("missile")
+  ) {
+    return "Ракетный обстрел";
+  }
+
+  if (
+    text.includes("רעידת אדמה") ||
+    text.includes("earthquake")
+  ) {
+    return "Землетрясение";
+  }
+
+  if (
+    text.includes("צונאמי") ||
+    text.includes("tsunami")
+  ) {
+    return "Цунами";
+  }
+
+  if (
+    text.includes("חומרים מסוכנים") ||
+    text.includes("hazardous") ||
+    text.includes("chemical")
+  ) {
+    return "Опасные материалы";
+  }
+
+  if (
+    text.includes("ירי") ||
+    text.includes("צבע אדום") ||
+    text.includes("tzeva adom") ||
+    text.includes("red alert")
+  ) {
+    return "Цева Адом";
+  }
+
+  return joined || "Цева Адом";
+}
+
+// ======================================
+// ISRAEL AREA CLEANUP - HEBREW ONLY
+// ======================================
+
+const HEBREW_BLOCKED_EXACT = new Set([
+  "דן",
+  "קו העימות",
+  "המפרץ",
+  "כרמל",
+  "העמקים",
+  "גליל עליון",
+  "גליל תחתון",
+  "גליל מרכזי",
+  "מרכז הגליל",
+  "דרום הגולן",
+  "בקעה",
+  "שפלה",
+  "השפלה",
+  "לכיש",
+  "ירקון",
+  "מנשה",
+  "יהודה",
+  "שומרון",
+  "שרון",
+  "גוש דן",
+  "מרכז",
+  "נגב",
+  "אזור",
+  "יעד",
+]);
+
+const HEBREW_BLOCKED_PREFIXES = [
+  "אזור תעשייה",
+  "איזור תעשייה",
+  "בית עלמין",
+  "כלא",
+  "מרכז אזורי",
+  "קו העימות",
+  "מתחם",
+  "פארק תעשייה",
+  "מכללת",
+  "בסיס",
+  "מחנה",
+  "תחנת רכבת",
+  "מסוף",
+  "קריית חינוך",
+];
+
+function looksLikeTime(value) {
+  return /^\d{1,2}:\d{2}:\d{2}$/.test(normalizeText(value));
+}
+
+function startsWithAny(value, prefixes) {
+  const cleanValue = normalizeText(value).toLowerCase();
+  return prefixes.some((prefix) =>
+    cleanValue.startsWith(normalizeText(prefix).toLowerCase())
   );
 }
 
-// ======================================
-// ISRAEL HEBREW -> RUSSIAN TRANSLITERATION
-// ======================================
+function isBlockedHebrewArea(value) {
+  const cleanValue = normalizeText(value);
 
-// Exact overrides for common places / better visual quality
-const ISRAEL_AREA_EXACT_MAP = {
-  "אשקלון": "Ашкелон",
-  "אשדוד": "Ашдод",
-  "שדרות": "Сдерот",
-  "איבים": "Ивим",
-  "ניר עם": "Нир-Ам",
-  "שדרות, איבים וניר-עם": "Сдерот, Ивим и Нир-Ам",
-  "שדרות, איבים, וניר עם": "Сдерот, Ивим и Нир-Ам",
-  "תל אביב": "Тель-Авив",
-  "תל אביב-יפו": "Тель-Авив-Яффо",
-  "תל אביב - יפו": "Тель-Авив - Яффо",
-  "ירושלים": "Иерусалим",
-  "חיפה": "Хайфа",
-  "באר שבע": "Беэр-Шева",
-  "פתח תקווה": "Петах-Тиква",
-  "ראשון לציון": "Ришон-ле-Цион",
-  "כפר סבא": "Кфар-Саба",
-  "הרצליה": "Герцлия",
-  "רעננה": "Раанана",
-  "נתניה": "Нетания",
-  "רחובות": "Реховот",
-  "אשקלון הדרומית": "Ашкелон ха-Дромит",
-  "מודיעין מכבים רעות": "Модиин-Маккабим-Реут",
-  "קריית גת": "Кирьят-Гат",
-  "קרית גת": "Кирьят-Гат",
-  "קריית מלאכי": "Кирьят-Малахи",
-  "קרית מלאכי": "Кирьят-Малахи",
-  "גן יבנה": "Ган-Явне",
-  "כפר עזה": "Кфар-Аза",
-  "נחל עוז": "Нахаль-Оз",
-  "נתיב העשרה": "Натив ха-Асара",
-  "יד מרדכי": "Яд Мордехай",
-  "כרם שלום": "Керем-Шалом",
-  "ניר יצחק": "Нир-Ицхак",
-  "עלומים": "Алюмим",
-  "מפלסים": "Мефальсим",
-  "זיקים": "Зиким",
-  "בארי": "Беэри",
-  "רעים": "Реим",
-  "אופקים": "Офаким",
-  "נתיבות": "Нетивот",
-  "לוד": "Лод",
-  "רמלה": "Рамла",
-  "חולון": "Холон",
-  "בת ים": "Бат-Ям",
-  "יבנה": "Явне",
-  "דובב": "Довев",
-  'דוב"ב': "Довев",
-};
+  if (!cleanValue) return true;
+  if (looksLikeTime(cleanValue)) return true;
+  if (cleanValue.includes("צבע אדום")) return true;
+  if (cleanValue.includes("התרעה")) return true;
+  if (HEBREW_BLOCKED_EXACT.has(cleanValue)) return true;
+  if (startsWithAny(cleanValue, HEBREW_BLOCKED_PREFIXES)) return true;
 
-// Hebrew char -> Cyrillic approximation
-const HEBREW_TO_RUSSIAN_CHAR_MAP = {
-  "א": "",
-  "ב": "б",
-  "ג": "г",
-  "ד": "д",
-  "ה": "а",
-  "ו": "в",
-  "ז": "з",
-  "ח": "х",
-  "ט": "т",
-  "י": "и",
-  "כ": "к",
-  "ך": "к",
-  "ל": "л",
-  "מ": "м",
-  "ם": "м",
-  "נ": "н",
-  "ן": "н",
-  "ס": "с",
-  "ע": "",
-  "פ": "п",
-  "ף": "п",
-  "צ": "ц",
-  "ץ": "ц",
-  "ק": "к",
-  "ר": "р",
-  "ש": "ш",
-  "ת": "т",
-};
-
-function titleCaseRussianLike(text) {
-  return text
-    .split(/(\s+|-|,|\/)/)
-    .map((part) => {
-      if (!part || /^(\s+|-|,|\/)$/.test(part)) return part;
-      return part.charAt(0).toUpperCase() + part.slice(1);
-    })
-    .join("");
+  return false;
 }
 
-function transliterateHebrewWord(word) {
-  const cleanWord = normalizeText(word);
-  if (!cleanWord) return cleanWord;
-
-  const exact = ISRAEL_AREA_EXACT_MAP[cleanWord];
-  if (exact) return exact;
-
-  let result = "";
-  const chars = [...cleanWord];
-
-  for (let i = 0; i < chars.length; i += 1) {
-    const current = chars[i];
-    const next = chars[i + 1] || "";
-    const prev = chars[i - 1] || "";
-
-    if (current === " ") {
-      result += " ";
-      continue;
-    }
-
-    if (current === "-") {
-      result += "-";
-      continue;
-    }
-
-    if (current === '"') {
-      continue;
-    }
-
-    if (current === "'") {
-      continue;
-    }
-
-    // Better handling for common Hebrew letter combinations
-    if (current === "ש") {
-      if (next === "י") {
-        result += "ши";
-        i += 1;
-        continue;
-      }
-      result += "ш";
-      continue;
-    }
-
-    if (current === "צ") {
-      if (next === "'") {
-        result += "ч";
-        i += 1;
-        continue;
-      }
-      result += "ц";
-      continue;
-    }
-
-    if (current === "ז") {
-      if (next === "'") {
-        result += "ж";
-        i += 1;
-        continue;
-      }
-      result += "з";
-      continue;
-    }
-
-    if (current === "ג") {
-      if (next === "'") {
-        result += "дж";
-        i += 1;
-        continue;
-      }
-      result += "г";
-      continue;
-    }
-
-    if (current === "ו") {
-      // Beginning of word often sounds more like "у"/"о" in names,
-      // but for consistency we keep simple approximation.
-      if (i === 0 && next === " ") {
-        result += "в";
-        continue;
-      }
-      result += "в";
-      continue;
-    }
-
-    if (current === "י") {
-      if (i === 0) {
-        result += "й";
-      } else if (prev === " ") {
-        result += "й";
-      } else {
-        result += "и";
-      }
-      continue;
-    }
-
-    if (current === "ה") {
-      if (i === 0) {
-        result += "ха";
-      } else {
-        result += "а";
-      }
-      continue;
-    }
-
-    if (current === "א") {
-      // silent most of the time
-      if (i === 0 && next) {
-        result += "а";
-      }
-      continue;
-    }
-
-    if (current === "ע") {
-      if (i === 0 && next) {
-        result += "а";
-      }
-      continue;
-    }
-
-    result += HEBREW_TO_RUSSIAN_CHAR_MAP[current] ?? current;
-  }
-
-  result = result
-    .replace(/аа+/g, "а")
-    .replace(/ии+/g, "и")
-    .replace(/вв+/g, "в")
-    .replace(/  +/g, " ")
-    .trim();
-
-  return titleCaseRussianLike(result || cleanWord);
-}
-
-function transliterateHebrewPhrase(text) {
-  const cleanText = normalizeText(text);
-  if (!cleanText) return cleanText;
-
-  const exact = ISRAEL_AREA_EXACT_MAP[cleanText];
-  if (exact) return exact;
-
-  // Handle comma-separated areas
-  const commaParts = cleanText.split(",").map((part) => normalizeText(part)).filter(Boolean);
-  if (commaParts.length > 1) {
-    return commaParts
-      .map((part) => transliterateHebrewPhrase(part))
-      .join(", ");
-  }
-
-  // Handle "ו" connector like "איבים וניר-עם"
-  const words = cleanText.split(" ").filter(Boolean);
-  const transliteratedWords = words.map((word) => {
-    const exactWord = ISRAEL_AREA_EXACT_MAP[word];
-    if (exactWord) return exactWord;
-
-    if (word.startsWith("ו") && word.length > 1) {
-      const rest = word.slice(1);
-      const transliteratedRest = transliterateHebrewWord(rest);
-      return `и ${transliteratedRest}`;
-    }
-
-    return transliterateHebrewWord(word);
-  });
-
-  return transliteratedWords.join(" ").replace(/\s+/g, " ").trim();
-}
-
-function translateIsraelAreasToRussian(areas) {
+function cleanIsraelAreas(areas) {
   return uniqueStrings(
-    (areas || []).map((area) => {
-      const cleanArea = normalizeText(area);
-      if (!cleanArea) return cleanArea;
-
-      const exact = ISRAEL_AREA_EXACT_MAP[cleanArea];
-      if (exact) return exact;
-
-      return transliterateHebrewPhrase(cleanArea);
-    })
+    (areas || [])
+      .map((area) => normalizeText(area))
+      .filter(Boolean)
+      .filter((area) => !isBlockedHebrewArea(area))
+      .filter((area) => !/^#+$/.test(area))
+      .filter((area) => area.length > 1)
   );
 }
 
-function buildAlertEmbed(country, alertType, areas) {
-  const safeCountry = country || "Неизвестно";
-  const safeType = alertType || "Тревога";
-  const safeAreas = Array.isArray(areas) ? areas.filter(Boolean) : [];
+function buildAreasText(areas) {
+  const safeAreas = Array.isArray(areas) ? uniqueStrings(areas).filter(Boolean) : [];
   const areaCount = safeAreas.length;
 
-  const areasText =
-    areaCount > 0
-      ? safeAreas.map((area, index) => `${index + 1}. ${area}`).join("\n")
-      : "Нет данных";
+  if (areaCount === 0) {
+    return {
+      areaCount: 0,
+      areasText: "Нет данных",
+      fieldName: "Населённые пункты:",
+    };
+  }
+
+  const areasText = safeAreas.map((area, index) => `${index + 1}. ${area}`).join("\n");
+
+  const fieldName =
+    areaCount === 1
+      ? "Населённый пункт:"
+      : areaCount < 5
+        ? "Населённые пункты:"
+        : "Список населённых пунктов:";
+
+  return {
+    areaCount,
+    areasText,
+    fieldName,
+  };
+}
+
+function buildStartAlertEmbed(country, alertType, areas, footerIconURL = null) {
+  const safeCountry = country || "Неизвестно";
+  const safeType = alertType || "Тревога";
+  const normalizedCountry = normalizeText(safeCountry).toLowerCase();
 
   const countryFlag =
-    safeCountry.toLowerCase() === "израиль"
+    normalizedCountry === "израиль"
       ? "🇮🇱"
-      : safeCountry.toLowerCase() === "украина"
+      : normalizedCountry === "украина"
         ? "🇺🇦"
         : "🌍";
 
+  const { areaCount, areasText, fieldName } = buildAreasText(areas);
+
   return new EmbedBuilder()
     .setColor(0xff0000)
-    .setTitle(`${countryFlag} Alert System`)
+    .setTitle(`${countryFlag} Система оповещения`)
     .setDescription(`## ${safeType}`)
     .addFields(
       {
@@ -373,27 +303,67 @@ function buildAlertEmbed(country, alertType, areas) {
         inline: true,
       },
       {
-        name: "Количество городов:",
+        name: "Количество населённых пунктов:",
         value: String(areaCount),
         inline: true,
       },
       {
-        name:
-          areaCount === 1
-            ? "Населённый пункт:"
-            : areaCount < 5
-              ? "Населённые пункты:"
-              : "Список населённых пунктов:",
+        name: fieldName,
         value: "```" + areasText.slice(0, 1000) + "```",
       },
       {
         name: "Инструкция:",
-        value:
-          "Немедленно пройдите в защищённое помещение и оставайтесь там до дальнейших указаний.",
+        value: "Немедленно пройдите в укрытие и оставайтесь там до дальнейших указаний.",
       }
     )
     .setFooter({
       text: `Automated Alerts System • ${new Date().toLocaleString("ru-RU")}`,
+      iconURL: footerIconURL || undefined,
+    })
+    .setTimestamp();
+}
+
+function buildEndAlertEmbed(country, alertType, areas, footerIconURL = null) {
+  const safeCountry = country || "Неизвестно";
+  const safeType = alertType || "Отбой тревоги";
+  const normalizedCountry = normalizeText(safeCountry).toLowerCase();
+
+  const countryFlag =
+    normalizedCountry === "израиль"
+      ? "🇮🇱"
+      : normalizedCountry === "украина"
+        ? "🇺🇦"
+        : "🌍";
+
+  const { areaCount, areasText, fieldName } = buildAreasText(areas);
+
+  return new EmbedBuilder()
+    .setColor(0x00c853)
+    .setTitle(`${countryFlag} Система оповещения`)
+    .setDescription(`## ✅ Отбой события: ${safeType}`)
+    .addFields(
+      {
+        name: "Страна:",
+        value: safeCountry,
+        inline: true,
+      },
+      {
+        name: "Количество населённых пунктов:",
+        value: String(areaCount),
+        inline: true,
+      },
+      {
+        name: fieldName,
+        value: "```" + areasText.slice(0, 1000) + "```",
+      },
+      {
+        name: "Статус:",
+        value: "Опасность по данному событию завершена.",
+      }
+    )
+    .setFooter({
+      text: `Automated Alerts System • ${new Date().toLocaleString("ru-RU")}`,
+      iconURL: footerIconURL || undefined,
     })
     .setTimestamp();
 }
@@ -463,6 +433,15 @@ async function safeTextFetch(url, options = {}) {
   return response.text();
 }
 
+function buildSnapshotKey(country, type, areas) {
+  const cleanAreas = uniqueStrings(areas).sort((a, b) => a.localeCompare(b, "he"));
+  return [
+    normalizeText(country).toLowerCase(),
+    normalizeText(type).toLowerCase(),
+    cleanAreas.join("|").toLowerCase(),
+  ].join("::");
+}
+
 // =============================
 // ISRAEL
 // =============================
@@ -500,21 +479,24 @@ async function fetchIsraelAlerts() {
 
       if (typeof item === "string") {
         const filteredAreas = filterAreasByAllowlist([item], ISRAEL_ALLOWED_AREAS);
-        if (filteredAreas.length === 0) continue;
+        const cleanedAreas = cleanIsraelAreas(filteredAreas);
 
-        const translatedAreas = translateIsraelAreasToRussian(filteredAreas);
+        if (cleanedAreas.length === 0) continue;
+
+        const type = "Цева Адом";
 
         alerts.push({
-          id: `israel::red-alert::${filteredAreas.join("|")}`,
+          id: `israel::${type}::${cleanedAreas.join("|")}`,
+          snapshotKey: buildSnapshotKey("Израиль", type, cleanedAreas),
           country: "Израиль",
-          type: "Цева Адом",
-          areas: translatedAreas,
+          type,
+          areas: cleanedAreas,
         });
 
         continue;
       }
 
-      const title = resolveIsraelAlertType(item);
+      const type = resolveIsraelAlertType(item);
 
       const rawAreas = uniqueStrings(
         item.cities ||
@@ -528,24 +510,22 @@ async function fetchIsraelAlerts() {
       );
 
       const filteredAreas = filterAreasByAllowlist(rawAreas, ISRAEL_ALLOWED_AREAS);
-      if (filteredAreas.length === 0) continue;
+      const cleanedAreas = cleanIsraelAreas(filteredAreas);
 
-      const translatedAreas = translateIsraelAreasToRussian(filteredAreas);
+      if (cleanedAreas.length === 0) continue;
 
-      const alertId =
-        normalizeText(item.id) ||
-        [
-          "israel",
-          title,
-          filteredAreas.join("|"),
-          normalizeText(item.time || item.timestamp || item.date || ""),
-        ].join("::");
+      const snapshotKey = buildSnapshotKey("Израиль", type, cleanedAreas);
 
       alerts.push({
-        id: alertId,
+        id:
+          normalizeText(item.id) ||
+          `israel::${type}::${cleanedAreas.join("|")}::${normalizeText(
+            item.time || item.timestamp || item.date || ""
+          )}`,
+        snapshotKey,
         country: "Израиль",
-        type: title,
-        areas: translatedAreas,
+        type,
+        areas: cleanedAreas,
       });
     }
 
@@ -603,6 +583,7 @@ function parseUkraineAlarmMapHtml(html) {
 
     alerts.push({
       id: `ukraine::${alertType}::${regionName}::${announcedAt}`,
+      snapshotKey: buildSnapshotKey("Украина", normalizeText(alertType || "Воздушная тревога"), [regionName]),
       country: "Украина",
       type: normalizeText(alertType || "Воздушная тревога"),
       areas: [regionName],
@@ -614,8 +595,8 @@ function parseUkraineAlarmMapHtml(html) {
   const seen = new Set();
 
   for (const alert of alerts) {
-    if (seen.has(alert.id)) continue;
-    seen.add(alert.id);
+    if (seen.has(alert.snapshotKey)) continue;
+    seen.add(alert.snapshotKey);
     deduped.push(alert);
   }
 
@@ -630,9 +611,14 @@ async function fetchUkraineAlerts() {
       },
     });
 
+    console.log("[ukraine] html length:", html.length);
+
     const parsedAlerts = parseUkraineAlarmMapHtml(html);
 
+    console.log("[ukraine] parsed alerts count:", parsedAlerts.length);
+
     if (!Array.isArray(parsedAlerts) || parsedAlerts.length === 0) {
+      console.log("[ukraine] no alerts parsed from html");
       return [];
     }
 
@@ -652,11 +638,16 @@ async function fetchUkraineAlerts() {
         id:
           item.id ||
           `ukraine::${item.type || "air-raid"}::${filteredAreas.join("|")}`,
+        snapshotKey:
+          item.snapshotKey ||
+          buildSnapshotKey("Украина", item.type || "Воздушная тревога", filteredAreas),
         country: "Украина",
         type: normalizeText(item.type || "Воздушная тревога"),
-        areas: filteredAreas,
+        areas: uniqueStrings(filteredAreas),
       });
     }
+
+    console.log("[ukraine] normalized alerts count:", normalizedAlerts.length);
 
     return normalizedAlerts;
   } catch (err) {
@@ -671,52 +662,167 @@ async function fetchAllAlerts() {
     fetchUkraineAlerts(),
   ]);
 
+  console.log(
+    `[alerts] fetched -> israel=${israelAlerts.length}, ukraine=${ukraineAlerts.length}`
+  );
+
   return [...israelAlerts, ...ukraineAlerts];
 }
 
-async function checkAndSendAlerts(client) {
-  const alerts = await fetchAllAlerts();
+function buildCurrentSnapshotMap(alerts) {
+  const map = new Map();
 
-  if (!Array.isArray(alerts) || alerts.length === 0) {
+  for (const alert of alerts || []) {
+    if (!alert?.snapshotKey) continue;
+
+    map.set(alert.snapshotKey, {
+      snapshotKey: alert.snapshotKey,
+      country: alert.country,
+      type: alert.type,
+      areas: uniqueStrings(alert.areas || []),
+    });
+  }
+
+  return map;
+}
+
+function getStartedAlerts(previousMap, currentMap) {
+  const started = [];
+
+  for (const [key, alert] of currentMap.entries()) {
+    if (!previousMap.has(key)) {
+      started.push(alert);
+    }
+  }
+
+  return started;
+}
+
+function getEndedAlerts(previousMap, currentMap) {
+  const ended = [];
+
+  for (const [key, alert] of previousMap.entries()) {
+    if (!currentMap.has(key)) {
+      ended.push(alert);
+    }
+  }
+
+  return ended;
+}
+
+async function sendStartedAlertToGuild(guild, alert, footerIconURL) {
+  const alertsChannel = getAlertsChannel(guild);
+  if (!alertsChannel) return;
+
+  const mentionText = getMentionForCountry(alert.country);
+  const sendId = `start::${alert.snapshotKey}`;
+
+  if (sentAlertIds.has(sendId)) {
     return;
   }
 
-  for (const guild of client.guilds.cache.values()) {
-    const alertsChannel = getAlertsChannel(guild);
-    if (!alertsChannel) continue;
+  const embed = buildStartAlertEmbed(
+    alert.country,
+    alert.type,
+    alert.areas,
+    footerIconURL
+  );
 
-    for (const alert of alerts) {
-      if (!alert?.id) continue;
-      if (sentAlertIds.has(alert.id)) continue;
+  await alertsChannel.send({
+    content: mentionText || undefined,
+    embeds: [embed],
+  });
 
-      sentAlertIds.add(alert.id);
+  rememberSentAlertId(sendId);
 
-      const embed = buildAlertEmbed(
-        alert.country,
-        alert.type,
-        alert.areas || []
-      );
+  console.log(
+    `[alerts] START sent ${alert.country} ${alert.type} -> ${alert.areas.join(", ")} in guild ${guild.id}`
+  );
+}
 
-      const mentionText = getMentionForCountry(alert.country);
+async function sendEndedAlertToGuild(guild, alert, footerIconURL) {
+  const alertsChannel = getAlertsChannel(guild);
+  if (!alertsChannel) return;
 
-      try {
-        await alertsChannel.send({
-          content: mentionText || undefined,
-          embeds: [embed],
-        });
-      } catch (err) {
-        console.error("Failed to send alert message:", err);
+  const embed = buildEndAlertEmbed(
+    alert.country,
+    alert.type,
+    alert.areas,
+    footerIconURL
+  );
+
+  await alertsChannel.send({
+    embeds: [embed],
+  });
+
+  console.log(
+    `[alerts] END sent ${alert.country} ${alert.type} -> ${alert.areas.join(", ")} in guild ${guild.id}`
+  );
+}
+
+async function checkAndSendAlerts(client) {
+  if (isCheckingAlerts) {
+    console.log("[alerts] skipped: previous check still running");
+    return;
+  }
+
+  isCheckingAlerts = true;
+
+  try {
+    const alerts = await fetchAllAlerts();
+    const currentSnapshot = buildCurrentSnapshotMap(alerts);
+
+    const startedAlerts = getStartedAlerts(activeAlertsSnapshot, currentSnapshot);
+    const endedAlerts = getEndedAlerts(activeAlertsSnapshot, currentSnapshot);
+
+    console.log(
+      `[alerts] state diff -> started=${startedAlerts.length}, ended=${endedAlerts.length}, active=${currentSnapshot.size}`
+    );
+
+    for (const guild of client.guilds.cache.values()) {
+      const alertsChannel = getAlertsChannel(guild);
+      if (!alertsChannel) continue;
+
+      const footerIconURL = guild.iconURL({ extension: "png", size: 128 });
+
+      for (const alert of startedAlerts) {
+        try {
+          await sendStartedAlertToGuild(guild, alert, footerIconURL);
+        } catch (err) {
+          console.error("Failed to send START alert message:", err);
+        }
+      }
+
+      for (const alert of endedAlerts) {
+        try {
+          await sendEndedAlertToGuild(guild, alert, footerIconURL);
+        } catch (err) {
+          console.error("Failed to send END alert message:", err);
+        }
       }
     }
+
+    activeAlertsSnapshot.clear();
+    for (const [key, value] of currentSnapshot.entries()) {
+      activeAlertsSnapshot.set(key, value);
+    }
+  } catch (err) {
+    console.error("checkAndSendAlerts error:", err);
+  } finally {
+    isCheckingAlerts = false;
   }
 }
 
 function startAlertsLoop(client) {
   if (!ENABLE_ALERTS_LOOP) return;
+  if (alertsLoopStarted) {
+    console.log("[alerts] loop already started");
+    return;
+  }
 
-  console.log(
-    `[alerts] loop started, interval=${ALERTS_CHECK_INTERVAL_MS}ms`
-  );
+  alertsLoopStarted = true;
+
+  console.log(`[alerts] loop started, interval=${ALERTS_CHECK_INTERVAL_MS}ms`);
 
   checkAndSendAlerts(client).catch((err) => {
     console.error("Initial alert loop error:", err);
@@ -731,18 +837,21 @@ function startAlertsLoop(client) {
 
 async function sendTestAlert(message, country = "Израиль") {
   const isUkraine = country.toLowerCase() === "украина";
+  const footerIconURL = message.guild?.iconURL({ extension: "png", size: 128 });
 
   const embed = isUkraine
-    ? buildAlertEmbed("Украина", "Воздушная тревога", [
-        "Киев",
-        "Харьков",
-        "Одесса",
-      ])
-    : buildAlertEmbed("Израиль", "Цева Адом", [
-        "Ашкелон",
-        "Ашдод",
-        "Сдерот, Ивим и Нир-Ам",
-      ]);
+    ? buildStartAlertEmbed(
+        "Украина",
+        "Воздушная тревога",
+        ["Киев", "Харьков", "Одесса"],
+        footerIconURL
+      )
+    : buildStartAlertEmbed(
+        "Израиль",
+        "Ракетный обстрел",
+        ["אשקלון", "אשדוד", "שדרות"],
+        footerIconURL
+      );
 
   await message.channel.send({
     content: isUkraine ? UKRAINE_ALERT_MENTION : ISRAEL_ALERT_MENTION,
@@ -750,12 +859,35 @@ async function sendTestAlert(message, country = "Израиль") {
   });
 }
 
+async function sendTestEndAlert(message, country = "Израиль") {
+  const isUkraine = country.toLowerCase() === "украина";
+  const footerIconURL = message.guild?.iconURL({ extension: "png", size: 128 });
+
+  const embed = isUkraine
+    ? buildEndAlertEmbed(
+        "Украина",
+        "Воздушная тревога",
+        ["Киев", "Харьков", "Одесса"],
+        footerIconURL
+      )
+    : buildEndAlertEmbed(
+        "Израиль",
+        "Ракетный обстрел",
+        ["אשקלון", "אשדוד", "שדרות"],
+        footerIconURL
+      );
+
+  await message.channel.send({ embeds: [embed] });
+}
+
 module.exports = {
   startAlertsLoop,
   sendTestAlert,
+  sendTestEndAlert,
   checkAndSendAlerts,
   fetchIsraelAlerts,
   fetchUkraineAlerts,
   fetchAllAlerts,
-  buildAlertEmbed,
+  buildStartAlertEmbed,
+  buildEndAlertEmbed,
 };
