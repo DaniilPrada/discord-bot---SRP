@@ -5,6 +5,9 @@ const ALERTS_CHECK_INTERVAL_MS = 5000;
 const ALERTS_CHANNEL_KEYWORD = "alerts";
 const ENABLE_ALERTS_LOOP = true;
 
+// Extra protection against false "end" caused by one bad poll
+const END_CONFIRMATIONS_REQUIRED = 2;
+
 // Mentions
 const ISRAEL_ALERT_MENTION = "<@941764578772144229>";
 const UKRAINE_ALERT_MENTION = "<@1035868648063127582>";
@@ -31,6 +34,9 @@ let alertsLoopStarted = false;
 
 // Active alerts snapshot for start/end detection
 const activeAlertsSnapshot = new Map();
+
+// How many successful polls in a row the alert was missing
+const pendingEndCounters = new Map();
 
 const ISRAEL_ALERT_TYPE_CODE_MAP = new Map([
   ["5", "Проникновение вражеского БПЛА"],
@@ -78,7 +84,9 @@ function filterAreasByAllowlist(areas, allowlist) {
     return cleanAreas;
   }
 
-  const normalizedAllowlist = allowlist.map((x) => normalizeText(x).toLowerCase());
+  const normalizedAllowlist = allowlist.map((x) =>
+    normalizeText(x).toLowerCase()
+  );
 
   return cleanAreas.filter((area) =>
     normalizedAllowlist.includes(normalizeText(area).toLowerCase())
@@ -172,17 +180,11 @@ function resolveIsraelAlertType(item) {
     return "Ракетный обстрел";
   }
 
-  if (
-    text.includes("רעידת אדמה") ||
-    text.includes("earthquake")
-  ) {
+  if (text.includes("רעידת אדמה") || text.includes("earthquake")) {
     return "Землетрясение";
   }
 
-  if (
-    text.includes("צונאמי") ||
-    text.includes("tsunami")
-  ) {
+  if (text.includes("צונאמי") || text.includes("tsunami")) {
     return "Цунами";
   }
 
@@ -294,7 +296,9 @@ function cleanIsraelAreas(areas) {
 }
 
 function buildAreasText(areas) {
-  const safeAreas = Array.isArray(areas) ? uniqueStrings(areas).filter(Boolean) : [];
+  const safeAreas = Array.isArray(areas)
+    ? uniqueStrings(areas).filter(Boolean)
+    : [];
   const areaCount = safeAreas.length;
 
   if (areaCount === 0) {
@@ -305,7 +309,9 @@ function buildAreasText(areas) {
     };
   }
 
-  const areasText = safeAreas.map((area, index) => `${index + 1}. ${area}`).join("\n");
+  const areasText = safeAreas
+    .map((area, index) => `${index + 1}. ${area}`)
+    .join("\n");
 
   const fieldName =
     areaCount === 1
@@ -356,7 +362,8 @@ function buildStartAlertEmbed(country, alertType, areas, footerIconURL = null) {
       },
       {
         name: "Инструкция:",
-        value: "Немедленно пройдите в укрытие и оставайтесь там до дальнейших указаний.",
+        value:
+          "Немедленно пройдите в укрытие и оставайтесь там до дальнейших указаний.",
       }
     )
     .setFooter({
@@ -442,7 +449,9 @@ async function safeJsonFetch(url, options = {}) {
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`HTTP ${response.status} for ${url} :: ${text.slice(0, 200)}`);
+    throw new Error(
+      `HTTP ${response.status} for ${url} :: ${text.slice(0, 200)}`
+    );
   }
 
   const lastModified = response.headers.get("last-modified");
@@ -461,7 +470,8 @@ async function safeTextFetch(url, options = {}) {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "en-US,en;q=0.9,uk;q=0.8,ru;q=0.7",
       ...(options.headers || {}),
     },
@@ -470,7 +480,9 @@ async function safeTextFetch(url, options = {}) {
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`HTTP ${response.status} for ${url} :: ${text.slice(0, 200)}`);
+    throw new Error(
+      `HTTP ${response.status} for ${url} :: ${text.slice(0, 200)}`
+    );
   }
 
   return response.text();
@@ -483,6 +495,70 @@ function buildSnapshotKey(country, type, areas) {
     normalizeText(type).toLowerCase(),
     cleanAreas.join("|").toLowerCase(),
   ].join("::");
+}
+
+function getCountryKey(country) {
+  return normalizeText(country).toLowerCase();
+}
+
+function cloneAlert(alert) {
+  return {
+    snapshotKey: alert.snapshotKey,
+    country: alert.country,
+    type: alert.type,
+    areas: uniqueStrings(alert.areas || []),
+  };
+}
+
+function getSnapshotForCountry(snapshotMap, country) {
+  const result = new Map();
+  const targetCountry = getCountryKey(country);
+
+  for (const [key, value] of snapshotMap.entries()) {
+    if (getCountryKey(value.country) === targetCountry) {
+      result.set(key, cloneAlert(value));
+    }
+  }
+
+  return result;
+}
+
+function replaceSnapshotForCountry(snapshotMap, country, newCountryMap) {
+  const targetCountry = getCountryKey(country);
+
+  for (const [key, value] of snapshotMap.entries()) {
+    if (getCountryKey(value.country) === targetCountry) {
+      snapshotMap.delete(key);
+    }
+  }
+
+  for (const [key, value] of newCountryMap.entries()) {
+    snapshotMap.set(key, cloneAlert(value));
+  }
+}
+
+function getStartedAlerts(previousMap, currentMap) {
+  const started = [];
+
+  for (const [key, alert] of currentMap.entries()) {
+    if (!previousMap.has(key)) {
+      started.push(alert);
+    }
+  }
+
+  return started;
+}
+
+function getEndedAlerts(previousMap, currentMap) {
+  const ended = [];
+
+  for (const [key, alert] of previousMap.entries()) {
+    if (!currentMap.has(key)) {
+      ended.push(alert);
+    }
+  }
+
+  return ended;
 }
 
 // =============================
@@ -502,7 +578,12 @@ async function fetchIsraelAlerts() {
     });
 
     if (result.notModified) {
-      return [];
+      return {
+        ok: true,
+        unchanged: true,
+        country: "Израиль",
+        alerts: null,
+      };
     }
 
     if (result.lastModified) {
@@ -512,7 +593,12 @@ async function fetchIsraelAlerts() {
     const data = result.data;
 
     if (!Array.isArray(data) || data.length === 0) {
-      return [];
+      return {
+        ok: true,
+        unchanged: false,
+        country: "Израиль",
+        alerts: [],
+      };
     }
 
     const alerts = [];
@@ -521,7 +607,10 @@ async function fetchIsraelAlerts() {
       if (!item) continue;
 
       if (typeof item === "string") {
-        const filteredAreas = filterAreasByAllowlist([item], ISRAEL_ALLOWED_AREAS);
+        const filteredAreas = filterAreasByAllowlist(
+          [item],
+          ISRAEL_ALLOWED_AREAS
+        );
         const cleanedAreas = cleanIsraelAreas(filteredAreas);
 
         if (cleanedAreas.length === 0) continue;
@@ -552,7 +641,10 @@ async function fetchIsraelAlerts() {
           (item.city ? [item.city] : [])
       );
 
-      const filteredAreas = filterAreasByAllowlist(rawAreas, ISRAEL_ALLOWED_AREAS);
+      const filteredAreas = filterAreasByAllowlist(
+        rawAreas,
+        ISRAEL_ALLOWED_AREAS
+      );
       const cleanedAreas = cleanIsraelAreas(filteredAreas);
 
       if (cleanedAreas.length === 0) continue;
@@ -572,10 +664,21 @@ async function fetchIsraelAlerts() {
       });
     }
 
-    return alerts;
+    return {
+      ok: true,
+      unchanged: false,
+      country: "Израиль",
+      alerts,
+    };
   } catch (err) {
     console.error("fetchIsraelAlerts error:", err.message);
-    return [];
+    return {
+      ok: false,
+      unchanged: false,
+      country: "Израиль",
+      alerts: null,
+      error: err.message,
+    };
   }
 }
 
@@ -622,11 +725,17 @@ function parseUkraineAlarmMapHtml(html) {
       continue;
     }
 
-    const announcedAt = normalizeText(announcedLine.split(":").slice(1).join(":"));
+    const announcedAt = normalizeText(
+      announcedLine.split(":").slice(1).join(":")
+    );
 
     alerts.push({
       id: `ukraine::${alertType}::${regionName}::${announcedAt}`,
-      snapshotKey: buildSnapshotKey("Украина", normalizeText(alertType || "Воздушная тревога"), [regionName]),
+      snapshotKey: buildSnapshotKey(
+        "Украина",
+        normalizeText(alertType || "Воздушная тревога"),
+        [regionName]
+      ),
       country: "Украина",
       type: normalizeText(alertType || "Воздушная тревога"),
       areas: [regionName],
@@ -662,7 +771,13 @@ async function fetchUkraineAlerts() {
 
     if (!Array.isArray(parsedAlerts) || parsedAlerts.length === 0) {
       console.log("[ukraine] no alerts parsed from html");
-      return [];
+
+      return {
+        ok: true,
+        unchanged: false,
+        country: "Украина",
+        alerts: [],
+      };
     }
 
     const normalizedAlerts = [];
@@ -683,7 +798,11 @@ async function fetchUkraineAlerts() {
           `ukraine::${item.type || "air-raid"}::${filteredAreas.join("|")}`,
         snapshotKey:
           item.snapshotKey ||
-          buildSnapshotKey("Украина", item.type || "Воздушная тревога", filteredAreas),
+          buildSnapshotKey(
+            "Украина",
+            item.type || "Воздушная тревога",
+            filteredAreas
+          ),
         country: "Украина",
         type: normalizeText(item.type || "Воздушная тревога"),
         areas: uniqueStrings(filteredAreas),
@@ -692,24 +811,42 @@ async function fetchUkraineAlerts() {
 
     console.log("[ukraine] normalized alerts count:", normalizedAlerts.length);
 
-    return normalizedAlerts;
+    return {
+      ok: true,
+      unchanged: false,
+      country: "Украина",
+      alerts: normalizedAlerts,
+    };
   } catch (err) {
     console.error("fetchUkraineAlerts error:", err.message);
-    return [];
+    return {
+      ok: false,
+      unchanged: false,
+      country: "Украина",
+      alerts: null,
+      error: err.message,
+    };
   }
 }
 
 async function fetchAllAlerts() {
-  const [israelAlerts, ukraineAlerts] = await Promise.all([
+  const [israelResult, ukraineResult] = await Promise.all([
     fetchIsraelAlerts(),
     fetchUkraineAlerts(),
   ]);
 
   console.log(
-    `[alerts] fetched -> israel=${israelAlerts.length}, ukraine=${ukraineAlerts.length}`
+    `[alerts] fetched -> israel_ok=${israelResult.ok} israel_unchanged=${israelResult.unchanged} israel_count=${
+      Array.isArray(israelResult.alerts) ? israelResult.alerts.length : "n/a"
+    }, ukraine_ok=${ukraineResult.ok} ukraine_unchanged=${ukraineResult.unchanged} ukraine_count=${
+      Array.isArray(ukraineResult.alerts) ? ukraineResult.alerts.length : "n/a"
+    }`
   );
 
-  return [...israelAlerts, ...ukraineAlerts];
+  return {
+    israel: israelResult,
+    ukraine: ukraineResult,
+  };
 }
 
 function buildCurrentSnapshotMap(alerts) {
@@ -727,30 +864,6 @@ function buildCurrentSnapshotMap(alerts) {
   }
 
   return map;
-}
-
-function getStartedAlerts(previousMap, currentMap) {
-  const started = [];
-
-  for (const [key, alert] of currentMap.entries()) {
-    if (!previousMap.has(key)) {
-      started.push(alert);
-    }
-  }
-
-  return started;
-}
-
-function getEndedAlerts(previousMap, currentMap) {
-  const ended = [];
-
-  for (const [key, alert] of previousMap.entries()) {
-    if (!currentMap.has(key)) {
-      ended.push(alert);
-    }
-  }
-
-  return ended;
 }
 
 async function sendStartedAlertToGuild(guild, alert, footerIconURL) {
@@ -779,7 +892,9 @@ async function sendStartedAlertToGuild(guild, alert, footerIconURL) {
   rememberSentAlertId(sendId);
 
   console.log(
-    `[alerts] START sent ${alert.country} ${alert.type} -> ${alert.areas.join(", ")} in guild ${guild.id}`
+    `[alerts] START sent ${alert.country} ${alert.type} -> ${alert.areas.join(
+      ", "
+    )} in guild ${guild.id}`
   );
 }
 
@@ -799,8 +914,103 @@ async function sendEndedAlertToGuild(guild, alert, footerIconURL) {
   });
 
   console.log(
-    `[alerts] END sent ${alert.country} ${alert.type} -> ${alert.areas.join(", ")} in guild ${guild.id}`
+    `[alerts] END sent ${alert.country} ${alert.type} -> ${alert.areas.join(
+      ", "
+    )} in guild ${guild.id}`
   );
+}
+
+function markCurrentAlertsAsSeen(countryMap) {
+  for (const key of countryMap.keys()) {
+    pendingEndCounters.delete(key);
+  }
+}
+
+function getConfirmedEndedAlerts(previousMap, currentMap) {
+  const confirmedEnded = [];
+
+  for (const [key, alert] of previousMap.entries()) {
+    if (currentMap.has(key)) {
+      pendingEndCounters.delete(key);
+      continue;
+    }
+
+    const nextCount = (pendingEndCounters.get(key) || 0) + 1;
+    pendingEndCounters.set(key, nextCount);
+
+    if (nextCount >= END_CONFIRMATIONS_REQUIRED) {
+      confirmedEnded.push(alert);
+      pendingEndCounters.delete(key);
+    }
+  }
+
+  return confirmedEnded;
+}
+
+async function processCountryChangesForGuilds(client, previousCountryMap, currentCountryMap) {
+  const startedAlerts = getStartedAlerts(previousCountryMap, currentCountryMap);
+  const endedAlerts = getConfirmedEndedAlerts(previousCountryMap, currentCountryMap);
+
+  console.log(
+    `[alerts] country diff -> started=${startedAlerts.length}, ended=${endedAlerts.length}, active=${currentCountryMap.size}`
+  );
+
+  if (startedAlerts.length === 0 && endedAlerts.length === 0) {
+    return;
+  }
+
+  for (const guild of client.guilds.cache.values()) {
+    const alertsChannel = getAlertsChannel(guild);
+    if (!alertsChannel) continue;
+
+    const footerIconURL = guild.iconURL({ extension: "png", size: 128 });
+
+    for (const alert of startedAlerts) {
+      try {
+        await sendStartedAlertToGuild(guild, alert, footerIconURL);
+      } catch (err) {
+        console.error("Failed to send START alert message:", err);
+      }
+    }
+
+    for (const alert of endedAlerts) {
+      try {
+        await sendEndedAlertToGuild(guild, alert, footerIconURL);
+      } catch (err) {
+        console.error("Failed to send END alert message:", err);
+      }
+    }
+  }
+}
+
+async function applyCountryResult(client, result) {
+  const country = result.country;
+  const previousCountryMap = getSnapshotForCountry(activeAlertsSnapshot, country);
+
+  if (!result.ok) {
+    console.log(
+      `[alerts] ${country}: source failed, keeping previous active alerts unchanged`
+    );
+    return;
+  }
+
+  if (result.unchanged) {
+    console.log(
+      `[alerts] ${country}: source returned not modified, keeping previous active alerts unchanged`
+    );
+    return;
+  }
+
+  const currentCountryMap = buildCurrentSnapshotMap(result.alerts || []);
+  markCurrentAlertsAsSeen(currentCountryMap);
+
+  await processCountryChangesForGuilds(
+    client,
+    previousCountryMap,
+    currentCountryMap
+  );
+
+  replaceSnapshotForCountry(activeAlertsSnapshot, country, currentCountryMap);
 }
 
 async function checkAndSendAlerts(client) {
@@ -812,43 +1022,14 @@ async function checkAndSendAlerts(client) {
   isCheckingAlerts = true;
 
   try {
-    const alerts = await fetchAllAlerts();
-    const currentSnapshot = buildCurrentSnapshotMap(alerts);
+    const results = await fetchAllAlerts();
 
-    const startedAlerts = getStartedAlerts(activeAlertsSnapshot, currentSnapshot);
-    const endedAlerts = getEndedAlerts(activeAlertsSnapshot, currentSnapshot);
+    await applyCountryResult(client, results.israel);
+    await applyCountryResult(client, results.ukraine);
 
     console.log(
-      `[alerts] state diff -> started=${startedAlerts.length}, ended=${endedAlerts.length}, active=${currentSnapshot.size}`
+      `[alerts] total active snapshot size=${activeAlertsSnapshot.size}`
     );
-
-    for (const guild of client.guilds.cache.values()) {
-      const alertsChannel = getAlertsChannel(guild);
-      if (!alertsChannel) continue;
-
-      const footerIconURL = guild.iconURL({ extension: "png", size: 128 });
-
-      for (const alert of startedAlerts) {
-        try {
-          await sendStartedAlertToGuild(guild, alert, footerIconURL);
-        } catch (err) {
-          console.error("Failed to send START alert message:", err);
-        }
-      }
-
-      for (const alert of endedAlerts) {
-        try {
-          await sendEndedAlertToGuild(guild, alert, footerIconURL);
-        } catch (err) {
-          console.error("Failed to send END alert message:", err);
-        }
-      }
-    }
-
-    activeAlertsSnapshot.clear();
-    for (const [key, value] of currentSnapshot.entries()) {
-      activeAlertsSnapshot.set(key, value);
-    }
   } catch (err) {
     console.error("checkAndSendAlerts error:", err);
   } finally {
@@ -865,7 +1046,9 @@ function startAlertsLoop(client) {
 
   alertsLoopStarted = true;
 
-  console.log(`[alerts] loop started, interval=${ALERTS_CHECK_INTERVAL_MS}ms`);
+  console.log(
+    `[alerts] loop started, interval=${ALERTS_CHECK_INTERVAL_MS}ms`
+  );
 
   checkAndSendAlerts(client).catch((err) => {
     console.error("Initial alert loop error:", err);
@@ -889,7 +1072,7 @@ async function sendTestAlert(message, country = "Израиль") {
     },
     {
       type: "Ракетный обстрел",
-      areas: ["אשקלון", "אשדод", "סדרות"],
+      areas: ["אשקלון", "אשדוד", "שדרות"],
     },
     {
       type: "Проникновение вражеского БПЛА",
