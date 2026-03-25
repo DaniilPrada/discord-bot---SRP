@@ -3700,7 +3700,7 @@ client.on("messageCreate", async (message) => {
       }
 
       await channel.send(
-        `✅ | Канал очищен. Удалено сообщений: ${totalDeleted}. Сообщения старше 14 дней Discord не удаляет через bulkDelete.`
+        `✅ | Канал очищен. Удалено сообщений: ${totalDeleted}.`
       );
     } catch (err) {
       console.error("Clearall error:", err);
