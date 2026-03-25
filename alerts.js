@@ -32,6 +32,10 @@ let alertsLoopStarted = false;
 // Active alerts snapshot for start/end detection
 const activeAlertsSnapshot = new Map();
 
+const ISRAEL_ALERT_TYPE_CODE_MAP = new Map([
+  ["5", "Проникновение вражеского БПЛА"],
+]);
+
 function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -85,7 +89,40 @@ function lowerText(value) {
   return normalizeText(value).toLowerCase();
 }
 
+function resolveIsraelAlertTypeCode(value) {
+  const code = normalizeText(value);
+
+  if (!code) return null;
+  return ISRAEL_ALERT_TYPE_CODE_MAP.get(code) || null;
+}
+
+function mapIsraelAlertValue(value) {
+  const raw = normalizeText(value);
+  if (!raw) return "";
+
+  const mappedCode = resolveIsraelAlertTypeCode(raw);
+  return mappedCode || raw;
+}
+
 function resolveIsraelAlertType(item) {
+  const directCodeCandidates = [
+    item?.cat,
+    item?.category,
+    item?.alertType,
+    item?.type,
+    item?.notificationType,
+    item?.eventCode,
+  ]
+    .map((v) => normalizeText(v))
+    .filter(Boolean);
+
+  for (const code of directCodeCandidates) {
+    const mapped = resolveIsraelAlertTypeCode(code);
+    if (mapped) {
+      return mapped;
+    }
+  }
+
   const values = [
     item?.title,
     item?.category,
@@ -95,8 +132,10 @@ function resolveIsraelAlertType(item) {
     item?.notificationType,
     item?.event,
     item?.desc,
+    item?.cat,
+    item?.eventCode,
   ]
-    .map((v) => normalizeText(v))
+    .map((v) => mapIsraelAlertValue(v))
     .filter(Boolean);
 
   const joined = values.join(" | ");
@@ -162,6 +201,10 @@ function resolveIsraelAlertType(item) {
     text.includes("red alert")
   ) {
     return "Цева Адом";
+  }
+
+  if (/^\d+$/.test(joined)) {
+    return resolveIsraelAlertTypeCode(joined) || "Цева Адом";
   }
 
   return joined || "Цева Адом";
@@ -839,19 +882,61 @@ async function sendTestAlert(message, country = "Израиль") {
   const isUkraine = country.toLowerCase() === "украина";
   const footerIconURL = message.guild?.iconURL({ extension: "png", size: 128 });
 
-  const embed = isUkraine
-    ? buildStartAlertEmbed(
-        "Украина",
-        "Воздушная тревога",
-        ["Киев", "Харьков", "Одесса"],
-        footerIconURL
-      )
-    : buildStartAlertEmbed(
-        "Израиль",
-        "Ракетный обстрел",
-        ["אשקלון", "אשדוד", "שדרות"],
-        footerIconURL
-      );
+  const israelTestAlerts = [
+    {
+      type: "Цева Адом",
+      areas: ["אשקלון", "אשדוד", "שדרות"],
+    },
+    {
+      type: "Ракетный обстрел",
+      areas: ["אשקלון", "אשדод", "סדרות"],
+    },
+    {
+      type: "Проникновение вражеского БПЛА",
+      areas: ["נהריה", "עכו", "קריית שמונה"],
+    },
+    {
+      type: "Проникновение террористов",
+      areas: ["מטולה", "שלומי", "זרעית"],
+    },
+    {
+      type: "Опасные материалы",
+      areas: ["חיפה", "קריית אתא", "נשר"],
+    },
+    {
+      type: "Землетрясение",
+      areas: ["טבריה", "צפת", "קצרין"],
+    },
+  ];
+
+  const ukraineTestAlerts = [
+    {
+      type: "Воздушная тревога",
+      areas: ["Киев", "Харьков", "Одесса"],
+    },
+    {
+      type: "Ракетная угроза",
+      areas: ["Днепр", "Запорожье", "Николаев"],
+    },
+    {
+      type: "Угроза БПЛА",
+      areas: ["Сумы", "Чернигов", "Полтава"],
+    },
+    {
+      type: "Угроза баллистики",
+      areas: ["Киев", "Кривой Рог", "Харьков"],
+    },
+  ];
+
+  const pool = isUkraine ? ukraineTestAlerts : israelTestAlerts;
+  const randomAlert = pool[Math.floor(Math.random() * pool.length)];
+
+  const embed = buildStartAlertEmbed(
+    isUkraine ? "Украина" : "Израиль",
+    randomAlert.type,
+    randomAlert.areas,
+    footerIconURL
+  );
 
   await message.channel.send({
     content: isUkraine ? UKRAINE_ALERT_MENTION : ISRAEL_ALERT_MENTION,
