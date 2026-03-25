@@ -1084,6 +1084,64 @@ function buildWelcomeEmbed(member) {
   return embed;
 }
 
+function formatUpdateDateTime(date = new Date()) {
+  return {
+    date: date.toLocaleDateString("ru-RU"),
+    time: date.toLocaleTimeString("ru-RU", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+}
+
+async function resolveUserForNews(guild, input, fallbackUser) {
+  if (!input) return fallbackUser;
+
+  const directId = extractUserId(input);
+
+  if (directId) {
+    const member =
+      guild.members.cache.get(directId) ||
+      (await guild.members.fetch(directId).catch(() => null));
+
+    if (member?.user) {
+      return member.user;
+    }
+
+    const fetchedUser = await client.users.fetch(directId).catch(() => null);
+    if (fetchedUser) {
+      return fetchedUser;
+    }
+  }
+
+  return fallbackUser;
+}
+
+function buildNewsEmbed(user, text) {
+  const avatarURL = user.displayAvatarURL({
+    extension: "png",
+    size: 256,
+  });
+
+  const dt = formatUpdateDateTime();
+
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setAuthor({
+      name: `Обновление от ${user.globalName || user.username}`,
+      iconURL: avatarURL,
+    })
+    .setDescription(String(text || "").trim().slice(0, 4000))
+    .setThumbnail(avatarURL)
+    .setImage(WELCOME_IMAGE_URL)
+    .setFooter({
+      text: `${dt.date} • ${dt.time}`,
+      iconURL: avatarURL,
+    })
+    .setTimestamp();
+}
+
+
 // =============================
 // Warn logic / auto punish
 // =============================
@@ -2379,35 +2437,34 @@ client.on("messageCreate", async (message) => {
     }
 
     let targetUser = message.author;
-    let text = "";
+    let text = args.join(" ");
 
     const firstArg = args[0];
-    const looksLikeUserId = /^\d{16,22}$/.test(firstArg);
+    const possibleId = extractUserId(firstArg);
 
-    if (looksLikeUserId) {
-      const fetchedUser = await client.users.fetch(firstArg).catch(() => null);
-
-      if (!fetchedUser) {
-        return message.reply("❌ Пользователь по указанному ID не найден.");
-      }
-
-      targetUser = fetchedUser;
-      text = args.slice(1).join(" ").trim();
-    } else {
-      text = args.join(" ").trim();
+    if (possibleId) {
+      targetUser = await resolveUserForNews(
+        message.guild,
+        firstArg,
+        message.author
+      );
+      text = args.slice(1).join(" ");
     }
 
-    if (!text) {
-      return message.reply("❌ Укажите текст для обновления.");
+    if (!text || !text.trim()) {
+      return message.reply("❗ Укажите текст обновления.");
     }
 
     const embed = buildNewsEmbed(targetUser, text);
 
     await message.delete().catch(() => {});
-    await message.channel.send({ embeds: [embed] });
+
+    await message.channel.send({
+      embeds: [embed],
+    });
+
     return;
   }
-
 
   if (command === "rank") {
     let member = message.member;
