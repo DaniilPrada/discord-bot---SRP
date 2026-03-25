@@ -2279,20 +2279,28 @@ async function recountAllMessagesInGuild(guild) {
 }
 
 
-function buildNewsEmbed(user, text) {
+function buildNewsEmbed(guild, user, text) {
   const safeText = String(text || "").trim().slice(0, 3500);
   const dt = formatUpdateDateTime();
 
-  return new EmbedBuilder()
+  const guildIconURL = guild?.iconURL
+    ? guild.iconURL({ extension: "png", size: 512 })
+    : null;
+
+  const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle("📢 Обновление")
-    .setDescription(`## ${safeText}`)
-    .setImage(WELCOME_IMAGE_URL)
+    .setDescription(safeText)
     .setFooter({
       text: `Доложил: ${user?.globalName || user?.username || "Unknown User"} • ${dt.date} ${dt.time}`,
     });
-}
 
+  if (guildIconURL) {
+   embed.setImage(guildIconURL);
+  }
+
+  return embed;
+}
 // =============================
 // Messages / Commands
 // =============================
@@ -2405,7 +2413,7 @@ client.on("messageCreate", async (message) => {
       return message.reply("❗ Укажите текст обновления.");
     }
 
-    const embed = buildNewsEmbed(targetUser, text);
+   const embed = buildNewsEmbed(message.guild, targetUser, text);
 
     await message.delete().catch(() => {});
 
