@@ -3663,69 +3663,111 @@ client.on("messageCreate", async (message) => {
       return message.reply("❌ У вас нет прав для этой команды.");
     }
 
-    const channel = message.channel;
-    await channel.send("🧹 | Очищаю все сообщения в этом канале...");
+    const oldChannel = message.channel;
 
     try {
-      let deleted;
-      do {
-        const fetched = await channel.messages.fetch({ limit: 100 });
-        if (fetched.size === 0) break;
-        deleted = await channel.bulkDelete(fetched, true);
-      } while (deleted.size !== 0);
+      const newChannel = await oldChannel.clone({
+        name: oldChannel.name,
+        topic: oldChannel.topic ?? undefined,
+        nsfw: oldChannel.nsfw,
+        bitrate: oldChannel.bitrate ?? undefined,
+        userLimit: oldChannel.userLimit ?? undefined,
+        rateLimitPerUser: oldChannel.rateLimitPerUser ?? undefined,
+        reason: `clearall by ${message.author.tag}`,
+      });
 
-      await channel.send(
-        "✅ | Канал и статистика сообщений полностью очищены (кроме очень старых сообщений старше 14 дней)."
+      await newChannel.setPosition(oldChannel.position).catch(() => {});
+
+      if (oldChannel.parentId && newChannel.parentId !== oldChannel.parentId) {
+        await newChannel.setParent(oldChannel.parentId).catch(() => {});
+      }
+
+      await oldChannel.delete(`clearall by ${message.author.tag}`);
+
+      await newChannel.send(
+        `✅ | Канал полностью очищен администратором ${message.author}.`
       );
     } catch (err) {
       console.error("Clearall error:", err);
-      await channel.send(
-        "❌ | Не удалось очистить сообщения (проверьте права бота)."
-      );
+
+      try {
+        await message.channel.send(
+          "❌ | Не удалось очистить канал (проверьте права бота)."
+        );
+      } catch {}
     }
 
     return;
   }
 
-  if (command === "help") {
+    if (command === "help") {
     const helpText =
-      "📋 Команды бота:\n" +
+      "📋 Команды бота:\n\n" +
+
+      "— Оповещения:\n" +
+      "`!тесттревога` – тест тревоги для Израиля\n" +
+      "`!тесттревогауа` – тест тревоги для Украины\n" +
+      "`!тестотбой` – тест отбоя для Израиля\n" +
+      "`!тестотбойуа` – тест отбоя для Украины\n\n" +
+
       "— Структура сервера:\n" +
       "`!setupserverlux` – создать/обновить структуру сервера по люксовому русскому макету\n" +
-      "`!cleanextraserver` – умная чистка: удалить лишние каналы/категории\n" +
+      "`!cleanextraserver` – удалить лишние каналы и категории\n" +
       "`!deletecategory` – удалить текущую категорию и её каналы (если не защищена)\n" +
       "`!deletechannel` – удалить текущий канал (если не защищён)\n" +
-      "`!protectchannel` / `!unprotectchannel` – защита канала\n" +
-      "`!protectcategory` / `!unprotectcategory` – защита категории\n\n" +
-      "— Утилиты:\n" +
-      "`!ping` – пинг бота\n" +
+      "`!protectchannel` – защитить текущий канал от удаления\n" +
+      "`!unprotectchannel` – снять защиту с текущего канала\n" +
+      "`!protectcategory` – защитить текущую категорию от удаления\n" +
+      "`!unprotectcategory` – снять защиту с текущей категории\n\n" +
+
+      "— Утилиты и панели:\n" +
+      "`!ping` – показать пинг бота\n" +
       "`!say <текст>` – отправить сообщение от имени бота\n" +
-      "`!testwelcome`, `!sendtestrules`, `!sendaccesspanel`, `!sendcandidaterules`, `!sendloginfo`, `!sendallowlistpanel`\n" +
-      "`!прошел проверку @User`\n\n" +
+      "`!testwelcome` – отправить тестовое welcome-сообщение\n" +
+      "`!sendtestrules` – отправить тест правил\n" +
+      "`!sendaccesspanel` – отправить тест панели доступа\n" +
+      "`!sendcandidaterules` – отправить правила для кандидатов\n" +
+      "`!sendloginfo` – отправить тестовую информацию о логах\n" +
+      "`!sendallowlistpanel` – отправить панель allowlist с кнопкой\n" +
+      "`!прошел проверку @User` – выдать доступ после проверки\n\n" +
+
+      "— Ранги и статистика:\n" +
+      "`!rank` – показать свою карточку ранга\n" +
+      "`!rank @User` – показать карточку ранга пользователя\n" +
+      "`!top` – топ участников по количеству сообщений\n" +
+      "`!recountmessages` – пересчитать все сообщения на сервере\n\n" +
+
       "— Развлечения:\n" +
-      "`!coin` – орёл/решка\n" +
-      "`!roll <число>` – бросок кубика\n" +
-      "`!rps rock|paper|scissors` – камень-ножницы-бумага\n\n" +
+      "`!coin` – орёл или решка\n" +
+      "`!roll <число>` – случайное число от 1 до указанного\n" +
+      "`!rps rock|paper|scissors` – камень, ножницы, бумага\n\n" +
+
       "— Музыка:\n" +
-      "`!play <ссылка или название>` – добавить трек и воспроизвести\n" +
-      "`!skip`, `!stop`, `!pause`, `!resume`, `!queue`, `!leave`, `!debugvoice`\n\n" +
-      "— Ранги:\n" +
-      "`!rank` / `!rank @User` – карточка ранга\n" +
-      "`!top` – топ-10 по количеству сообщений\n\n" +
+      "`!play <ссылка или название>` – добавить трек или плейлист в очередь\n" +
+      "`!skip` – пропустить текущий трек\n" +
+      "`!stop` – остановить музыку и очистить очередь\n" +
+      "`!pause` – поставить музыку на паузу\n" +
+      "`!resume` – продолжить воспроизведение\n" +
+      "`!queue` – показать очередь треков\n" +
+      "`!leave` – вывести бота из голосового канала\n" +
+      "`!debugvoice` – диагностика голосового подключения\n\n" +
+
       "— Модерация:\n" +
-      "`!warn @User/ID/tag <причина>`\n" +
-      "`!warns @User/ID/tag`\n" +
-      "`!unwarn @User/ID/tag <номер>`\n" +
-      "`!clearwarns @User/ID/tag`\n" +
-      "`!mute @User/ID/tag <время> <причина>` / `!unmute @User/ID/tag` – Discord timeout\n" +
-      "`!kick @User/ID/tag <причина>`\n" +
-      "`!ban @User/ID/tag <время> <причина>` – временный бан\n" +
-      "`!ban @User/ID/tag <причина>` – перманентный бан\n" +
-      "`!unban <UserID/mention/username/tag> <причина>`\n" +
-      "`!bans @User/ID/tag` – история банов\n" +
+      "`!warn @User/ID/tag <причина>` – выдать предупреждение\n" +
+      "`!warns @User/ID/tag` – показать активные предупреждения\n" +
+      "`!unwarn @User/ID/tag <номер>` – удалить предупреждение по номеру\n" +
+      "`!clearwarns @User/ID/tag` – очистить все предупреждения\n" +
+      "`!mute @User/ID/tag <время> <причина>` – выдать мут\n" +
+      "`!unmute @User/ID/tag` – снять мут\n" +
+      "`!kick @User/ID/tag <причина>` – кикнуть пользователя\n" +
+      "`!ban @User/ID/tag <время> <причина>` – временно забанить пользователя\n" +
+      "`!ban @User/ID/tag <причина>` – перманентно забанить пользователя\n" +
+      "`!unban <UserID/mention/username/tag> [причина]` – разбанить пользователя\n" +
+      "`!bans @User/ID/tag` – история банов пользователя\n" +
       "`!clearbans @User/ID/tag` – очистить историю банов\n" +
       "`!clear <1-100>` – удалить последние сообщения\n" +
-      "`!clearall` – очистить канал и статистика сообщений\n\n" +
+      "`!clearall` – полностью очистить текущий канал\n\n" +
+
       "⏱ Формат времени: `s` = секунды, `m` = минуты, `h` = часы, `d` = дни.\n" +
       "⚠️ Предупреждения считаются только за последние 4 дня.\n" +
       "🔗 Авто-бан за сторонние ссылки включён.";
