@@ -2281,22 +2281,28 @@ async function recountAllMessagesInGuild(guild) {
 
 function buildNewsEmbed(guild, user, text) {
   const safeText = String(text || "").trim().slice(0, 3500);
-  const dt = formatUpdateDateTime();
 
   const guildIconURL = guild?.iconURL
-    ? guild.iconURL({ extension: "png", size: 512 })
+    ? guild.iconURL({ extension: "png", size: 256 })
     : null;
+
+  const now = new Date();
+  const dateText = now.toLocaleDateString("ru-RU");
+  const timeText = now.toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
-    .setTitle("📢 Обновление")
+    .setTitle("📢StreetLife RP  Обновление")
     .setDescription(safeText)
     .setFooter({
-      text: `Доложил: ${user?.globalName || user?.username || "Unknown User"} • ${dt.date} ${dt.time}`,
+      text: `Доложил: ${user?.globalName || user?.username || "Unknown User"} • ${dateText} ${timeText}`,
     });
 
   if (guildIconURL) {
-   embed.setImage(guildIconURL);
+    embed.setThumbnail(guildIconURL);
   }
 
   return embed;
