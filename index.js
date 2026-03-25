@@ -2244,6 +2244,47 @@ async function recountAllMessagesInGuild(guild) {
   transaction(rowsToSave);
 }
 
+
+
+function buildNewsEmbed(user, text) {
+  const safeText = String(text || "").trim();
+
+  const avatarURL = user?.displayAvatarURL
+    ? user.displayAvatarURL({ extension: "png", size: 256 })
+    : null;
+
+  const now = new Date();
+  const dateText = now.toLocaleDateString("ru-RU");
+  const timeText = now.toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle("📢 Обновление")
+    .setDescription(safeText)
+    .setTimestamp()
+    .setFooter({
+      text: `Дата: ${dateText} • Время: ${timeText}`,
+    });
+
+  if (user) {
+    embed.setAuthor({
+      name: user.globalName || user.username || "Unknown User",
+      iconURL: avatarURL || undefined,
+    });
+
+    if (avatarURL) {
+      embed.setThumbnail(avatarURL);
+    }
+  }
+
+  return embed;
+}
+
+
 // =============================
 // Messages / Commands
 // =============================
