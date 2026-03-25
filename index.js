@@ -2279,12 +2279,14 @@ async function recountAllMessagesInGuild(guild) {
 }
 
 
-function buildNewsEmbed(guild, user, text) {
+function buildNewsEmbed(member, text) {
   const safeText = String(text || "").trim().slice(0, 3500);
 
-  const guildIconURL = guild?.iconURL
-    ? guild.iconURL({ extension: "png", size: 256 })
-    : null;
+  const serverAvatarURL = member?.displayAvatarURL
+    ? member.displayAvatarURL({ extension: "png", size: 256 })
+    : member?.user?.displayAvatarURL
+      ? member.user.displayAvatarURL({ extension: "png", size: 256 })
+      : null;
 
   const now = new Date();
   const dateText = now.toLocaleDateString("ru-RU");
@@ -2298,11 +2300,11 @@ function buildNewsEmbed(guild, user, text) {
     .setTitle("📢StreetLife RP  Обновление")
     .setDescription(safeText)
     .setFooter({
-      text: `Доложил: ${user?.globalName || user?.username || "Unknown User"} • ${dateText} ${timeText}`,
+      text: `Доложил: ${member?.displayName || member?.user?.globalName || member?.user?.username || "Unknown User"} • ${dateText} ${timeText}`,
     });
 
-  if (guildIconURL) {
-    embed.setThumbnail(guildIconURL);
+  if (serverAvatarURL) {
+    embed.setThumbnail(serverAvatarURL);
   }
 
   return embed;
@@ -2389,46 +2391,48 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  if (command === "n") {
-    if (!moderator) {
-      return message.reply("❌ У вас нет прав для этой команды.");
-    }
+if (command === "n") {
+  if (!moderator) {
+    return message.reply("❌ У вас нет прав для этой команды.");
+  }
 
-    if (args.length === 0) {
-      return message.reply(
-        "❗ Использование:\n`!n <текст>`\nили\n`!n <UserID> <текст>`"
-      );
-    }
+  if (args.length === 0) {
+    return message.reply(
+      "❗ Использование:\n`!n <текст>`\nили\n`!n <UserID> <текст>`"
+    );
+  }
 
-    let targetUser = message.author;
-    let text = args.join(" ");
+  let targetMember = message.member;
+  let text = args.join(" ");
 
-    const firstArg = args[0];
-    const possibleId = extractUserId(firstArg);
+  const firstArg = args[0];
+  const possibleId = extractUserId(firstArg);
 
-    if (possibleId) {
-      targetUser = await resolveUserForNews(
-        message.guild,
-        firstArg,
-        message.author
-      );
+  if (possibleId) {
+    const foundMember =
+      message.guild.members.cache.get(possibleId) ||
+      (await message.guild.members.fetch(possibleId).catch(() => null));
+
+    if (foundMember) {
+      targetMember = foundMember;
       text = args.slice(1).join(" ");
     }
-
-    if (!text || !text.trim()) {
-      return message.reply("❗ Укажите текст обновления.");
-    }
-
-   const embed = buildNewsEmbed(message.guild, targetUser, text);
-
-    await message.delete().catch(() => {});
-
-    await message.channel.send({
-      embeds: [embed],
-    });
-
-    return;
   }
+
+  if (!text || !text.trim()) {
+    return message.reply("❗ Укажите текст обновления.");
+  }
+
+  const embed = buildNewsEmbed(targetMember, text);
+
+  await message.delete().catch(() => {});
+
+  await message.channel.send({
+    embeds: [embed],
+  });
+
+  return;
+}
 
   if (command === "rank") {
     let member = message.member;
