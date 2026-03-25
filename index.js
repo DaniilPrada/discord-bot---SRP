@@ -44,7 +44,21 @@ const ffmpegStatic = require("ffmpeg-static");
 const {
   startAlertsLoop,
   sendTestAlert,
+  sendTestEndAlert,
 } = require("./alerts");
+
+
+if (command === "тестотбой") {
+  await sendTestEndAlert(message, "Израиль");
+  return;
+}
+
+if (command === "тестотбойуа") {
+  await sendTestEndAlert(message, "Украина");
+  return;
+}
+
+
 
 process.env.FFMPEG_PATH = ffmpegStatic || process.env.FFMPEG_PATH || "";
 
