@@ -6,7 +6,7 @@ const ALERTS_CHANNEL_KEYWORD = "alerts";
 const ENABLE_ALERTS_LOOP = true;
 
 // Extra protection against false "end" caused by one bad poll
-const END_CONFIRMATIONS_REQUIRED = 2;
+const END_CONFIRMATIONS_REQUIRED = 2; // event end is sent after 2 missing polls in a row
 
 // Mentions
 const ISRAEL_ALERT_MENTION = "<@941764578772144229>";
@@ -25,8 +25,7 @@ const sentAlertIds = new Set();
 const sentAlertOrder = [];
 const MAX_SENT_ALERT_IDS = 3000;
 
-// Small cache helpers for If-Modified-Since
-let israelLastModified = null;
+// Israel end-event fix: always fetch full notifications snapshot (no If-Modified-Since cache)
 
 // Prevent overlapping checks
 let isCheckingAlerts = false;
@@ -567,28 +566,10 @@ function getEndedAlerts(previousMap, currentMap) {
 async function fetchIsraelAlerts() {
   try {
     const result = await safeJsonFetch(ISRAEL_ALERTS_URL, {
-      headers: israelLastModified
-        ? {
-            "If-Modified-Since": israelLastModified,
-            Referer: "https://www.tzevaadom.co.il/",
-          }
-        : {
-            Referer: "https://www.tzevaadom.co.il/",
-          },
+      headers: {
+        Referer: "https://www.tzevaadom.co.il/",
+      },
     });
-
-    if (result.notModified) {
-      return {
-        ok: true,
-        unchanged: true,
-        country: "Израиль",
-        alerts: null,
-      };
-    }
-
-    if (result.lastModified) {
-      israelLastModified = result.lastModified;
-    }
 
     const data = result.data;
 
@@ -938,6 +919,12 @@ function getConfirmedEndedAlerts(previousMap, currentMap) {
     const nextCount = (pendingEndCounters.get(key) || 0) + 1;
     pendingEndCounters.set(key, nextCount);
 
+    console.log(
+      `[alerts] pending END ${alert.country} ${alert.type} -> ${alert.areas.join(
+        ", "
+      )} | ${nextCount}/${END_CONFIRMATIONS_REQUIRED}`
+    );
+
     if (nextCount >= END_CONFIRMATIONS_REQUIRED) {
       confirmedEnded.push(alert);
       pendingEndCounters.delete(key);
@@ -996,12 +983,16 @@ async function applyCountryResult(client, result) {
 
   if (result.unchanged) {
     console.log(
-      `[alerts] ${country}: source returned not modified, keeping previous active alerts unchanged`
+      `[alerts] ${country}: source returned not modified, forcing empty diff check`
     );
-    return;
   }
 
   const currentCountryMap = buildCurrentSnapshotMap(result.alerts || []);
+
+  console.log(
+    `[alerts] ${country}: previous=${previousCountryMap.size}, current=${currentCountryMap.size}`
+  );
+
   markCurrentAlertsAsSeen(currentCountryMap);
 
   await processCountryChangesForGuilds(
