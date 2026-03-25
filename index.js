@@ -3658,43 +3658,55 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  if (command === "clearall") {
+    if (command === "clearall") {
     if (!moderator) {
       return message.reply("❌ У вас нет прав для этой команды.");
     }
 
-    const oldChannel = message.channel;
+    const channel = message.channel;
 
     try {
-      const newChannel = await oldChannel.clone({
-        name: oldChannel.name,
-        topic: oldChannel.topic ?? undefined,
-        nsfw: oldChannel.nsfw,
-        bitrate: oldChannel.bitrate ?? undefined,
-        userLimit: oldChannel.userLimit ?? undefined,
-        rateLimitPerUser: oldChannel.rateLimitPerUser ?? undefined,
-        reason: `clearall by ${message.author.tag}`,
-      });
+      const startMsg = await channel.send("🧹 | Полностью очищаю канал...");
 
-      await newChannel.setPosition(oldChannel.position).catch(() => {});
+      let totalDeleted = 0;
 
-      if (oldChannel.parentId && newChannel.parentId !== oldChannel.parentId) {
-        await newChannel.setParent(oldChannel.parentId).catch(() => {});
+      while (true) {
+        const fetched = await channel.messages.fetch({ limit: 100 });
+
+        if (!fetched || fetched.size === 0) {
+          break;
+        }
+
+        const deletable = fetched.filter((msg) => {
+          const age = Date.now() - msg.createdTimestamp;
+          return age < 14 * 24 * 60 * 60 * 1000;
+        });
+
+        if (deletable.size === 0) {
+          break;
+        }
+
+        const deleted = await channel.bulkDelete(deletable, true).catch(() => null);
+
+        if (!deleted || deleted.size === 0) {
+          break;
+        }
+
+        totalDeleted += deleted.size;
+
+        if (deleted.size < 100) {
+          break;
+        }
       }
 
-      await oldChannel.delete(`clearall by ${message.author.tag}`);
-
-      await newChannel.send(
-        `✅ | Канал полностью очищен администратором ${message.author}.`
+      await channel.send(
+        `✅ | Канал очищен. Удалено сообщений: ${totalDeleted}. Сообщения старше 14 дней Discord не удаляет через bulkDelete.`
       );
     } catch (err) {
       console.error("Clearall error:", err);
-
-      try {
-        await message.channel.send(
-          "❌ | Не удалось очистить канал (проверьте права бота)."
-        );
-      } catch {}
+      await channel.send(
+        "❌ | Не удалось очистить канал (проверьте права бота)."
+      );
     }
 
     return;
