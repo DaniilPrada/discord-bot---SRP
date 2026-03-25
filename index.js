@@ -2297,7 +2297,7 @@ function buildNewsEmbed(member, text) {
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
-    .setTitle("📢StreetLife RP  Обновление")
+    .setTitle("📢 StreetLife RP  Обновление")
     .setDescription(safeText)
     .setFooter({
       text: `Доложил: ${member?.displayName || member?.user?.globalName || member?.user?.username || "Unknown User"} • ${dateText} ${timeText}`,
