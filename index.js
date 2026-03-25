@@ -48,18 +48,6 @@ const {
 } = require("./alerts");
 
 
-if (command === "тестотбой") {
-  await sendTestEndAlert(message, "Израиль");
-  return;
-}
-
-if (command === "тестотбойуа") {
-  await sendTestEndAlert(message, "Украина");
-  return;
-}
-
-
-
 process.env.FFMPEG_PATH = ffmpegStatic || process.env.FFMPEG_PATH || "";
 
 if (!process.env.TOKEN) {
@@ -2303,13 +2291,23 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  if (command === "тесттревога") {
+   if (command === "тесттревога") {
     await sendTestAlert(message, "Израиль");
     return;
   }
 
   if (command === "тесттревогауа") {
     await sendTestAlert(message, "Украина");
+    return;
+  }
+
+  if (command === "тестотбой") {
+    await sendTestEndAlert(message, "Израиль");
+    return;
+  }
+
+  if (command === "тестотбойуа") {
+    await sendTestEndAlert(message, "Украина");
     return;
   }
 
