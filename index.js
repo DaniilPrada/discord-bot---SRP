@@ -9,6 +9,7 @@ process.on("uncaughtException", (err) => {
   console.error("UNCAUGHT EXCEPTION:", err);
 });
 
+
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
@@ -47,6 +48,7 @@ const {
   sendTestEndAlert,
 } = require("./alerts");
 
+const { startFormsRelay } = require("./formsRelay");
 
 process.env.FFMPEG_PATH = ffmpegStatic || process.env.FFMPEG_PATH || "";
 
@@ -2055,6 +2057,7 @@ client.once("clientReady", async () => {
 
   startTempBanWatcher();
   startAlertsLoop(client);
+  startFormsRelay(client);
 });
 
 client.on("guildMemberAdd", async (member) => {
