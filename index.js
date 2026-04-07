@@ -49,6 +49,7 @@ const {
 } = require("./alerts");
 
 const { startFormsRelay } = require("./formsRelay");
+const { attachDashboardBridge } = require("./dashboardBridge");
 
 process.env.FFMPEG_PATH = ffmpegStatic || process.env.FFMPEG_PATH || "";
 
@@ -3901,6 +3902,19 @@ if (command === "n") {
     return;
   }
 });
+
+
+attachDashboardBridge(client, {
+  prefix: PREFIX,
+  rankDb,
+  modules: {
+    welcomeMessages: true,
+    autoModeration: AUTO_BAN_THIRD_PARTY_LINKS,
+    musicModule: true,
+    antiSpamFilter: false,
+  },
+});
+
 
 // =============================
 // Login
