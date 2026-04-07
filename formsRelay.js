@@ -83,7 +83,6 @@ function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
   });
-
   res.end(JSON.stringify(payload));
 }
 
@@ -94,17 +93,9 @@ function validatePayload(payload) {
   const submittedAt =
     normalizeText(payload.submittedAt) || new Date().toISOString();
 
-  if (!name) {
-    throw new Error('Missing "name"');
-  }
-
-  if (!nickname) {
-    throw new Error('Missing "nickname"');
-  }
-
-  if (!idea) {
-    throw new Error('Missing "idea"');
-  }
+  if (!name) throw new Error('Missing "name"');
+  if (!nickname) throw new Error('Missing "nickname"');
+  if (!idea) throw new Error('Missing "idea"');
 
   return {
     name,
@@ -192,11 +183,16 @@ function buildIdeaEmbed(payload, channel) {
 }
 
 async function deliverIdeaToDiscord(client, payload) {
+  console.log("[forms-relay] deliver:start", JSON.stringify(payload));
+
   if (!client || typeof client.isReady !== "function" || !client.isReady()) {
     throw new Error("Discord client is not ready yet");
   }
 
   const channel = await resolveIdeasChannel(client);
+
+  console.log("[forms-relay] channel id:", channel.id);
+  console.log("[forms-relay] channel name:", channel.name);
 
   if (channel.type !== ChannelType.GuildText) {
     throw new Error("Configured ideas channel is not a text channel");
@@ -205,11 +201,13 @@ async function deliverIdeaToDiscord(client, payload) {
   const embed = buildIdeaEmbed(payload, channel);
   const mentionText = buildMentionText();
 
-  await channel.send({
+  const sentMessage = await channel.send({
     content: mentionText || undefined,
     embeds: [embed],
     allowedMentions: buildAllowedMentions(),
   });
+
+  console.log("[forms-relay] sent message id:", sentMessage.id);
 }
 
 function isAuthorized(req, payload) {
@@ -238,6 +236,16 @@ function startFormsRelay(client) {
 
   relayServer = http.createServer(async (req, res) => {
     try {
+      console.log("[forms-relay] incoming request:", req.method, req.url);
+
+      if (req.method === "GET" && req.url === "/") {
+        sendJson(res, 200, {
+          ok: true,
+          service: "forms-relay-root",
+        });
+        return;
+      }
+
       if (req.method === "GET" && req.url === "/health") {
         sendJson(res, 200, {
           ok: true,
