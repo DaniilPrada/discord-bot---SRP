@@ -2057,7 +2057,6 @@ client.once("clientReady", async () => {
 
   startTempBanWatcher();
   startAlertsLoop(client);
-  startFormsRelay(client);
 });
 
 client.on("guildMemberAdd", async (member) => {
@@ -3906,6 +3905,7 @@ if (command === "n") {
 // =============================
 // Login
 // =============================
+startFormsRelay(client);
 client.login(process.env.TOKEN);
 
 // Load allowlist override if present
