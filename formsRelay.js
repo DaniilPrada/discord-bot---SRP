@@ -3,8 +3,11 @@ const { EmbedBuilder, ChannelType } = require("discord.js");
 
 const FORMS_RELAY_ENABLED =
   String(process.env.FORMS_RELAY_ENABLED || "true").toLowerCase() === "true";
+
 const FORMS_RELAY_HOST = process.env.FORMS_RELAY_HOST || "0.0.0.0";
-const FORMS_RELAY_PORT = Number(process.env.FORMS_RELAY_PORT || 3210);
+const FORMS_RELAY_PORT = Number(
+  process.env.PORT || process.env.FORMS_RELAY_PORT || 3210
+);
 const FORMS_RELAY_SECRET = String(process.env.FORMS_RELAY_SECRET || "").trim();
 
 const IDEAS_CHANNEL_ID = String(
@@ -111,7 +114,6 @@ function validatePayload(payload) {
   const idea = normalizeText(payload.idea);
   const submittedAt =
     normalizeText(payload.submittedAt) || new Date().toISOString();
-  const formTitle = normalizeText(payload.formTitle) || "Google Form";
 
   if (!name) {
     throw new Error('Missing "name"');
@@ -130,7 +132,6 @@ function validatePayload(payload) {
     nickname,
     idea,
     submittedAt,
-    formTitle,
   };
 }
 
@@ -150,41 +151,65 @@ async function resolveIdeasChannel(client) {
   return fetched;
 }
 
-function buildIdeaEmbed(payload) {
-  return new EmbedBuilder()
+function formatSubmittedAt(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Не указано";
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
+function buildIdeaEmbed(payload, channel) {
+  const guildIconUrl =
+    channel && channel.guild
+      ? channel.guild.iconURL({ extension: "png", size: 256 })
+      : null;
+
+  const embed = new EmbedBuilder()
     .setColor(0x8e44ad)
-    .setTitle("💡 Новая идея из Google Forms")
+    .setTitle("💡 Новая идея")
     .addFields(
       {
         name: "Имя",
-        value: "```" + truncateText(payload.name, 900) + "```",
+        value: truncateText(payload.name, 1024),
         inline: false,
       },
       {
         name: "Никнейм",
-        value: "```" + truncateText(payload.nickname, 900) + "```",
+        value: truncateText(payload.nickname, 1024),
         inline: false,
       },
       {
         name: "Идея",
-        value: "```" + truncateText(payload.idea, 1000) + "```",
+        value: truncateText(payload.idea, 1024),
         inline: false,
       },
       {
-        name: "Источник",
-        value: payload.formTitle,
-        inline: true,
-      },
-      {
-        name: "Время отправки",
-        value: payload.submittedAt,
-        inline: true,
+        name: "Время",
+        value: formatSubmittedAt(payload.submittedAt),
+        inline: false,
       }
     )
     .setFooter({
-      text: "StreetLife Forms Relay",
+      text: "StreetLife RP",
     })
     .setTimestamp(new Date(payload.submittedAt));
+
+  if (guildIconUrl) {
+    embed.setThumbnail(guildIconUrl);
+  }
+
+  return embed;
 }
 
 async function deliverIdeaToDiscord(client, payload) {
@@ -198,7 +223,7 @@ async function deliverIdeaToDiscord(client, payload) {
     throw new Error("Configured ideas channel is not a text channel");
   }
 
-  const embed = buildIdeaEmbed(payload);
+  const embed = buildIdeaEmbed(payload, channel);
   const mentionText = buildMentionText();
 
   await channel.send({
@@ -238,9 +263,10 @@ function startFormsRelay(client) {
         sendJson(res, 200, {
           ok: true,
           service: "forms-relay",
-          discordReady: client && typeof client.isReady === "function"
-            ? client.isReady()
-            : false,
+          discordReady:
+            client && typeof client.isReady === "function"
+              ? client.isReady()
+              : false,
         });
         return;
       }
