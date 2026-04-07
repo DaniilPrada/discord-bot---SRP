@@ -22,20 +22,7 @@ const IDEAS_MENTION_IDS = String(
   .filter(Boolean);
 
 const MAX_BODY_BYTES = 256 * 1024;
-const RECENT_REQUEST_TTL_MS = 60_000;
-
-const recentFingerprints = new Map();
 let relayServer = null;
-
-function cleanupRecentFingerprints() {
-  const now = Date.now();
-
-  for (const [fingerprint, createdAt] of recentFingerprints.entries()) {
-    if (now - createdAt > RECENT_REQUEST_TTL_MS) {
-      recentFingerprints.delete(fingerprint);
-    }
-  }
-}
 
 function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -98,14 +85,6 @@ function sendJson(res, statusCode, payload) {
   });
 
   res.end(JSON.stringify(payload));
-}
-
-function buildFingerprint(payload) {
-  return [
-    normalizeText(payload.name).toLowerCase(),
-    normalizeText(payload.nickname).toLowerCase(),
-    normalizeText(payload.idea).toLowerCase(),
-  ].join("::");
 }
 
 function validatePayload(payload) {
@@ -284,17 +263,7 @@ function startFormsRelay(client) {
       }
 
       const payload = validatePayload(rawPayload);
-
-      cleanupRecentFingerprints();
-
-      const fingerprint = buildFingerprint(payload);
-      if (recentFingerprints.has(fingerprint)) {
-        sendJson(res, 200, { ok: true, duplicate: true });
-        return;
-      }
-
       await deliverIdeaToDiscord(client, payload);
-      recentFingerprints.set(fingerprint, Date.now());
 
       sendJson(res, 200, { ok: true });
     } catch (error) {
