@@ -57,7 +57,7 @@ export default function CommandsPage() {
       selectedGuildId={selectedGuildId}
       onGuildChange={setSelectedGuildId}
     >
-      <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
+      <section className=" border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
         <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h2 className="text-xl font-bold">Available Commands</h2>
@@ -71,13 +71,13 @@ export default function CommandsPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search command"
-              className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+              className=" border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
             />
 
             <select
               value={category}
               onChange={(event) => setCategory(event.target.value)}
-              className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+              className=" border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
             >
               {categories.map((item) => (
                 <option key={item} value={item} className="bg-[#111827]">
@@ -92,21 +92,21 @@ export default function CommandsPage() {
           {filteredCommands.map((command) => (
             <div
               key={command.name}
-              className="rounded-2xl border border-white/10 bg-black/10 p-4"
+              className=" border border-white/10 bg-black/10 p-4"
             >
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-lg font-semibold">!{command.name}</p>
+                  <p className="text-lg font-semibold">{command.label || `!${command.name}`}</p>
                   <p className="mt-1 text-sm text-white/60">
                     {command.description}
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 text-xs">
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
+                  <span className="border border-white/10 bg-white/5 px-3 py-1 text-white/70">
                     {command.category}
                   </span>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/70">
+                  <span className="border border-white/10 bg-white/5 px-3 py-1 text-white/70">
                     uses: {command.usageCount}
                   </span>
                   <span
@@ -124,7 +124,7 @@ export default function CommandsPage() {
           ))}
 
           {filteredCommands.length === 0 && (
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-white/60">
+            <div className=" border border-white/10 bg-black/10 p-4 text-sm text-white/60">
               No commands match the current filters.
             </div>
           )}
