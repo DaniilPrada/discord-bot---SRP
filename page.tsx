@@ -188,7 +188,7 @@ export default function DashboardPage() {
   }
 
   const badge = (
-    <div className="flex items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm">
+    <div className="flex items-center gap-2  border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm">
       <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
       <span className="text-white/70">
         {loading ? "Loading…" : data.botStatus === "online" ? "Live" : "Offline"}
@@ -206,7 +206,7 @@ export default function DashboardPage() {
       badge={badge}
     >
       {errorText && (
-        <div className="mb-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+        <div className="mb-4  border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
           {errorText}
         </div>
       )}
@@ -215,14 +215,14 @@ export default function DashboardPage() {
         {statCards.map((card) => (
           <div
             key={card.title}
-            className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl shadow-black/20"
+            className=" border border-white/10 bg-white/5 p-5 shadow-xl shadow-black/20"
           >
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-white/60">{card.title}</p>
                 <p className="mt-2 text-3xl font-bold">{card.value}</p>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-2xl">
+              <div className="flex h-12 w-12 items-center justify-center  bg-white/10 text-2xl">
                 {card.icon}
               </div>
             </div>
@@ -232,7 +232,7 @@ export default function DashboardPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.55fr_1fr]">
         <div className="space-y-6">
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
+          <section className=" border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
             <h2 className="mb-5 text-xl font-bold">Server Overview</h2>
 
             <div className="space-y-4 text-sm sm:text-base">
@@ -264,7 +264,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
+          <section className=" border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
             <h2 className="mb-6 text-xl font-bold">Command Usage</h2>
 
             <div className="space-y-5">
@@ -286,12 +286,12 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
+          <section className=" border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
             <h2 className="mb-5 text-xl font-bold">Recent Activity</h2>
 
             <div className="space-y-4">
               {data.recentActivity.length === 0 && (
-                <div className="rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-sm text-white/60">
+                <div className=" border border-white/8 bg-black/10 px-4 py-3 text-sm text-white/60">
                   No activity yet for this server.
                 </div>
               )}
@@ -299,7 +299,7 @@ export default function DashboardPage() {
               {data.recentActivity.slice(0, 5).map((item, index) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between rounded-2xl border border-white/8 bg-black/10 px-4 py-3"
+                  className="flex items-center justify-between  border border-white/8 bg-black/10 px-4 py-3"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 text-xs font-bold text-white">
@@ -324,7 +324,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-6">
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
+          <section className=" border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
             <h2 className="mb-5 text-xl font-bold">Bot Controls</h2>
 
             <div className="space-y-4">
@@ -343,7 +343,7 @@ export default function DashboardPage() {
                     onClick={() =>
                       toggleModule(control.key as keyof DashboardPayload["modules"])
                     }
-                    className="flex w-full items-center justify-between rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-left transition hover:bg-white/10"
+                    className="flex w-full items-center justify-between  border border-white/8 bg-black/10 px-4 py-3 text-left transition hover:bg-white/10"
                   >
                     <span className="text-sm font-medium text-white/85">
                       {control.label}
@@ -380,33 +380,33 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
+          <section className=" border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
             <h2 className="mb-5 text-xl font-bold">System Metrics</h2>
 
             <div className="grid gap-4">
-              <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+              <div className=" border border-white/10 bg-black/10 p-4">
                 <p className="text-sm text-white/60">Ping</p>
                 <p className="mt-2 text-2xl font-bold">{data.ping} ms</p>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+              <div className=" border border-white/10 bg-black/10 p-4">
                 <p className="text-sm text-white/60">Memory</p>
                 <p className="mt-2 text-2xl font-bold">{data.memoryMb} MB</p>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+              <div className=" border border-white/10 bg-black/10 p-4">
                 <p className="text-sm text-white/60">CPU</p>
                 <p className="mt-2 text-2xl font-bold">{data.cpuUsage}%</p>
               </div>
             </div>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
+          <section className=" border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
             <h2 className="mb-5 text-xl font-bold">Moderation Logs</h2>
 
             <div className="space-y-4">
               {data.moderationLogs.length === 0 && (
-                <div className="rounded-2xl border border-white/8 bg-black/10 px-4 py-3 text-sm text-white/60">
+                <div className=" border border-white/8 bg-black/10 px-4 py-3 text-sm text-white/60">
                   No moderation logs yet.
                 </div>
               )}
@@ -414,7 +414,7 @@ export default function DashboardPage() {
               {data.moderationLogs.slice(0, 5).map((log) => (
                 <div
                   key={log.id}
-                  className="rounded-2xl border border-white/8 bg-black/10 px-4 py-3"
+                  className=" border border-white/8 bg-black/10 px-4 py-3"
                 >
                   <p className="text-sm text-white/85">{log.message}</p>
                   <p className="mt-1 text-xs text-white/45">
