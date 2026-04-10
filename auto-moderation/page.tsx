@@ -86,7 +86,7 @@ export default function AutoModerationPage() {
       selectedGuildId={selectedGuildId}
       onGuildChange={setSelectedGuildId}
     >
-      <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
+      <section className=" border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
         <h2 className="mb-5 text-xl font-bold">Moderation & Runtime Modules</h2>
 
         <div className="space-y-4">
@@ -98,7 +98,7 @@ export default function AutoModerationPage() {
                 key={rule.key}
                 type="button"
                 onClick={() => toggle(rule.key).catch(console.error)}
-                className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-black/10 p-4 text-left transition hover:bg-white/10"
+                className="flex w-full items-center justify-between  border border-white/10 bg-black/10 p-4 text-left transition hover:bg-white/10"
               >
                 <div>
                   <p className="font-medium">{rule.name}</p>
