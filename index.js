@@ -124,6 +124,14 @@ const ALLOWED_LINK_DOMAINS = [
   "imgur.com",
 ];
 
+const runtimeModules = {
+  welcomeMessages: true,
+  autoModeration: AUTO_BAN_THIRD_PARTY_LINKS,
+  musicModule: true,
+  antiSpamFilter: false,
+};
+
+
 // =============================
 // Rank database (SQLite)
 // =============================
@@ -890,7 +898,7 @@ async function sendOnlyToBanRoom(guild, content) {
 // Third-party link auto-ban
 // =============================
 async function handleThirdPartyLinkAutoBan(message) {
-  if (!AUTO_BAN_THIRD_PARTY_LINKS) return false;
+  if (!runtimeModules.autoModeration) return false;
   if (!message.guild) return false;
   if (message.author.bot) return false;
   if (isModerator(message.member)) return false;
@@ -2063,6 +2071,7 @@ client.once("clientReady", async () => {
 client.on("guildMemberAdd", async (member) => {
   const reBanned = await ensureUserStillBannedOnJoin(member);
   if (reBanned) return;
+  if (!runtimeModules.welcomeMessages) return;
 
   const welcomeChannel = getWelcomeChannel(member.guild);
   if (!welcomeChannel) return;
@@ -2315,6 +2324,12 @@ function buildNewsEmbed(member, text) {
 // =============================
 // Messages / Commands
 // =============================
+function ensureMusicModuleEnabled(message) {
+  if (runtimeModules.musicModule) return true;
+  message.reply("❌ Музыкальный модуль сейчас отключён в dashboard.").catch(() => {});
+  return false;
+}
+
 client.on("messageCreate", async (message) => {
   if (!message.guild) return;
   if (message.author.bot) return;
@@ -2979,6 +2994,7 @@ if (command === "n") {
   }
 
   if (command === "play") {
+    if (!ensureMusicModuleEnabled(message)) return;
     const voiceChannel = message.member.voice.channel;
     if (!voiceChannel) {
       return message.reply("❌ Ты должен находиться в голосовом канале.");
@@ -3076,6 +3092,7 @@ if (command === "n") {
   }
 
   if (command === "skip") {
+    if (!ensureMusicModuleEnabled(message)) return;
     const queue = musicQueues.get(guildId);
     if (!queue || !queue.player || queue.songs.length === 0) {
       return message.reply("ℹ️ Сейчас ничего не играет.");
@@ -3088,6 +3105,7 @@ if (command === "n") {
   }
 
   if (command === "stop") {
+    if (!ensureMusicModuleEnabled(message)) return;
     const queue = musicQueues.get(guildId);
     if (!queue || !queue.player) {
       return message.reply("ℹ️ Сейчас ничего не играет.");
@@ -3101,6 +3119,7 @@ if (command === "n") {
   }
 
   if (command === "pause") {
+    if (!ensureMusicModuleEnabled(message)) return;
     const queue = musicQueues.get(guildId);
     if (!queue || !queue.player) {
       return message.reply("ℹ️ Сейчас ничего не играет.");
@@ -3112,6 +3131,7 @@ if (command === "n") {
   }
 
   if (command === "resume") {
+    if (!ensureMusicModuleEnabled(message)) return;
     const queue = musicQueues.get(guildId);
     if (!queue || !queue.player) {
       return message.reply("ℹ️ Сейчас ничего не играет.");
@@ -3123,6 +3143,7 @@ if (command === "n") {
   }
 
   if (command === "queue") {
+    if (!ensureMusicModuleEnabled(message)) return;
     const queue = musicQueues.get(guildId);
     if (!queue || queue.songs.length === 0) {
       return message.reply("ℹ️ Очередь пуста.");
@@ -3138,6 +3159,7 @@ if (command === "n") {
   }
 
   if (command === "debugvoice") {
+    if (!ensureMusicModuleEnabled(message)) return;
     const connection = getVoiceConnection(guildId);
     const queue = musicQueues.get(guildId);
     const botVoiceChannel = getBotVoiceChannel(message.guild);
@@ -3167,6 +3189,7 @@ if (command === "n") {
   }
 
   if (command === "leave") {
+    if (!ensureMusicModuleEnabled(message)) return;
     const queue = musicQueues.get(guildId);
     const connection = getVoiceConnection(guildId);
     const botVoiceChannel = getBotVoiceChannel(message.guild);
@@ -3907,12 +3930,9 @@ if (command === "n") {
 attachDashboardBridge(client, {
   prefix: PREFIX,
   rankDb,
-  modules: {
-    welcomeMessages: true,
-    autoModeration: AUTO_BAN_THIRD_PARTY_LINKS,
-    musicModule: true,
-    antiSpamFilter: false,
-  },
+  modulesRef: runtimeModules,
+  protectionRef: protection,
+  protectionFilePath: PROTECT_FILE,
 });
 
 
