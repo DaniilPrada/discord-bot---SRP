@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import PanelLayout from "../components/PanelLayout";
 import {
   createCategory,
@@ -15,11 +15,12 @@ import {
   renameChannel,
   unprotectCategory,
   unprotectChannel,
+  updateGeneralSettings,
   type SettingsPayload,
 } from "../lib/dashboardApi";
 import { useSelectedGuild } from "../lib/useSelectedGuild";
 
-const defaultSettings: SettingsPayload = {
+const defaultData: SettingsPayload = {
   ok: true,
   guild: { id: "", name: "No Server", memberCount: 0, iconUrl: null },
   prefix: "!",
@@ -33,116 +34,151 @@ const defaultSettings: SettingsPayload = {
   categories: [],
   channels: [],
   roles: [],
+  textChannels: [],
   environment: {
     welcomeChannelId: null,
     logResultsChannelId: null,
+    rulesCheckChannelId: null,
+    getAccessChannelId: null,
     allowlistRoleId: null,
   },
+  security: { writeAuthRequired: false },
 };
 
 export default function ServerSettingsPage() {
   const { guilds, selectedGuildId, setSelectedGuildId } = useSelectedGuild();
-  const [data, setData] = useState<SettingsPayload>(defaultSettings);
+  const [data, setData] = useState<SettingsPayload>(defaultData);
+  const [message, setMessage] = useState("");
+  const [errorText, setErrorText] = useState("");
+  const [parentCategoryId, setParentCategoryId] = useState("");
+  const [categoryName, setCategoryName] = useState("");
   const [textChannelName, setTextChannelName] = useState("");
   const [voiceChannelName, setVoiceChannelName] = useState("");
-  const [categoryName, setCategoryName] = useState("");
-  const [parentCategoryId, setParentCategoryId] = useState("");
-  const [message, setMessage] = useState("");
+  const [generalForm, setGeneralForm] = useState({
+    prefix: "!",
+    welcomeChannelId: "",
+    logResultsChannelId: "",
+    rulesCheckChannelId: "",
+    getAccessChannelId: "",
+  });
 
   async function loadSettings(guildId: string) {
     const payload = await fetchSettings(guildId);
     setData(payload);
+    setGeneralForm({
+      prefix: payload.prefix || "!",
+      welcomeChannelId: payload.environment.welcomeChannelId || "",
+      logResultsChannelId: payload.environment.logResultsChannelId || "",
+      rulesCheckChannelId: payload.environment.rulesCheckChannelId || "",
+      getAccessChannelId: payload.environment.getAccessChannelId || "",
+    });
   }
 
   useEffect(() => {
     if (!selectedGuildId) return;
-    loadSettings(selectedGuildId).catch(console.error);
+    loadSettings(selectedGuildId).catch((error) => {
+      console.error(error);
+      setErrorText(error instanceof Error ? error.message : "Failed to load settings.");
+    });
   }, [selectedGuildId]);
 
-  async function handleCreateTextChannel() {
-    if (!selectedGuildId || !textChannelName.trim()) return;
-    await createTextChannel(selectedGuildId, {
-      name: textChannelName,
-      parentId: parentCategoryId || null,
-    });
-    setTextChannelName("");
-    await loadSettings(selectedGuildId);
-    setMessage("Text channel created.");
+  const textChannelOptions = useMemo(() => data.textChannels || [], [data.textChannels]);
+
+  async function handleGeneralSave() {
+    if (!selectedGuildId) return;
+    try {
+      await updateGeneralSettings(selectedGuildId, {
+        prefix: generalForm.prefix,
+        welcomeChannelId: generalForm.welcomeChannelId || null,
+        logResultsChannelId: generalForm.logResultsChannelId || null,
+        rulesCheckChannelId: generalForm.rulesCheckChannelId || null,
+        getAccessChannelId: generalForm.getAccessChannelId || null,
+      });
+      await loadSettings(selectedGuildId);
+      setErrorText("");
+      setMessage("General settings saved.");
+    } catch (error) {
+      console.error(error);
+      setErrorText(error instanceof Error ? error.message : "Failed to save general settings.");
+    }
   }
 
-  async function handleCreateVoiceChannel() {
-    if (!selectedGuildId || !voiceChannelName.trim()) return;
-    await createVoiceChannel(selectedGuildId, {
-      name: voiceChannelName,
-      parentId: parentCategoryId || null,
-    });
-    setVoiceChannelName("");
-    await loadSettings(selectedGuildId);
-    setMessage("Voice channel created.");
-  }
-
-  async function handleCreateCategory() {
-    if (!selectedGuildId || !categoryName.trim()) return;
-    await createCategory(selectedGuildId, { name: categoryName });
-    setCategoryName("");
-    await loadSettings(selectedGuildId);
-    setMessage("Category created.");
+  async function runAction(action: () => Promise<unknown>, successText: string) {
+    if (!selectedGuildId) return;
+    try {
+      await action();
+      await loadSettings(selectedGuildId);
+      setErrorText("");
+      setMessage(successText);
+    } catch (error) {
+      console.error(error);
+      setErrorText(error instanceof Error ? error.message : "Action failed.");
+    }
   }
 
   return (
     <PanelLayout
       title="Server Settings"
-      description="Create, rename, protect and delete channels/categories in real time for the selected guild."
+      description="Manage prefix, system channels, categories and channels in real time for the selected guild."
       guilds={guilds}
       selectedGuildId={selectedGuildId}
       onGuildChange={setSelectedGuildId}
     >
-      {message && (
-        <div className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {message}
-        </div>
-      )}
+      {message && <Notice tone="success">{message}</Notice>}
+      {errorText && <Notice tone="error">{errorText}</Notice>}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1.35fr]">
-        <div className="space-y-6">
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
-            <h2 className="mb-5 text-xl font-bold">General Settings</h2>
-
+      <div className="grid gap-5 xl:grid-cols-[0.95fr_1.45fr]">
+        <div className="space-y-5">
+          <section className="border border-white/8 bg-white/[0.04] p-5 shadow-xl shadow-black/20">
+            <h2 className="mb-4 text-xl font-bold">General Settings</h2>
             <div className="grid gap-4">
-              <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-                <p className="text-sm text-white/60">Server Name</p>
-                <p className="mt-2 text-lg font-semibold">{data.guild.name}</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-                <p className="text-sm text-white/60">Bot Prefix</p>
-                <p className="mt-2 text-lg font-semibold">{data.prefix}</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-                <p className="text-sm text-white/60">Welcome Channel ID</p>
-                <p className="mt-2 break-all text-sm font-semibold">
-                  {data.environment.welcomeChannelId || "Not configured"}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-                <p className="text-sm text-white/60">Logs Channel ID</p>
-                <p className="mt-2 break-all text-sm font-semibold">
-                  {data.environment.logResultsChannelId || "Not configured"}
-                </p>
-              </div>
+              <Field label="Server Name" value={data.guild.name} readOnly />
+              <Field
+                label="Bot Prefix"
+                value={generalForm.prefix}
+                onChange={(value) => setGeneralForm((current) => ({ ...current, prefix: value.slice(0, 4) }))}
+              />
+              <ChannelSelect
+                label="Welcome Channel"
+                value={generalForm.welcomeChannelId}
+                onChange={(value) => setGeneralForm((current) => ({ ...current, welcomeChannelId: value }))}
+                options={textChannelOptions}
+              />
+              <ChannelSelect
+                label="Logs Channel"
+                value={generalForm.logResultsChannelId}
+                onChange={(value) => setGeneralForm((current) => ({ ...current, logResultsChannelId: value }))}
+                options={textChannelOptions}
+              />
+              <ChannelSelect
+                label="Rules Check Channel"
+                value={generalForm.rulesCheckChannelId}
+                onChange={(value) => setGeneralForm((current) => ({ ...current, rulesCheckChannelId: value }))}
+                options={textChannelOptions}
+              />
+              <ChannelSelect
+                label="Access Channel"
+                value={generalForm.getAccessChannelId}
+                onChange={(value) => setGeneralForm((current) => ({ ...current, getAccessChannelId: value }))}
+                options={textChannelOptions}
+              />
+              <button
+                type="button"
+                onClick={() => handleGeneralSave().catch(console.error)}
+                className="border border-cyan-400/25 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-200"
+              >
+                Save General Settings
+              </button>
             </div>
           </section>
 
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
-            <h2 className="mb-5 text-xl font-bold">Create New</h2>
-
-            <div className="space-y-4">
+          <section className="border border-white/8 bg-white/[0.04] p-5 shadow-xl shadow-black/20">
+            <h2 className="mb-4 text-xl font-bold">Create New</h2>
+            <div className="space-y-3">
               <select
                 value={parentCategoryId}
                 onChange={(event) => setParentCategoryId(event.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+                className="w-full border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
               >
                 <option value="">No parent category</option>
                 {data.categories.map((category) => (
@@ -152,301 +188,232 @@ export default function ServerSettingsPage() {
                 ))}
               </select>
 
-              <div className="flex gap-2">
+              <ActionRow>
                 <input
                   value={categoryName}
                   onChange={(event) => setCategoryName(event.target.value)}
                   placeholder="New category name"
-                  className="flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+                  className="flex-1 border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
                 />
                 <button
                   type="button"
-                  onClick={() => handleCreateCategory().catch(console.error)}
-                  className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-200"
+                  onClick={() =>
+                    runAction(
+                      async () => {
+                        await createCategory(selectedGuildId, { name: categoryName });
+                        setCategoryName("");
+                      },
+                      "Category created."
+                    ).catch(console.error)
+                  }
+                  className="border border-indigo-400/25 bg-indigo-500/10 px-4 py-3 text-sm font-semibold text-indigo-200"
                 >
                   Create
                 </button>
-              </div>
+              </ActionRow>
 
-              <div className="flex gap-2">
+              <ActionRow>
                 <input
                   value={textChannelName}
                   onChange={(event) => setTextChannelName(event.target.value)}
                   placeholder="New text channel"
-                  className="flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+                  className="flex-1 border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
                 />
                 <button
                   type="button"
-                  onClick={() => handleCreateTextChannel().catch(console.error)}
-                  className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200"
+                  onClick={() =>
+                    runAction(
+                      async () => {
+                        await createTextChannel(selectedGuildId, {
+                          name: textChannelName,
+                          parentId: parentCategoryId || null,
+                        });
+                        setTextChannelName("");
+                      },
+                      "Text channel created."
+                    ).catch(console.error)
+                  }
+                  className="border border-emerald-400/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200"
                 >
                   Text
                 </button>
-              </div>
+              </ActionRow>
 
-              <div className="flex gap-2">
+              <ActionRow>
                 <input
                   value={voiceChannelName}
                   onChange={(event) => setVoiceChannelName(event.target.value)}
                   placeholder="New voice channel"
-                  className="flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+                  className="flex-1 border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
                 />
                 <button
                   type="button"
-                  onClick={() => handleCreateVoiceChannel().catch(console.error)}
-                  className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-200"
+                  onClick={() =>
+                    runAction(
+                      async () => {
+                        await createVoiceChannel(selectedGuildId, {
+                          name: voiceChannelName,
+                          parentId: parentCategoryId || null,
+                        });
+                        setVoiceChannelName("");
+                      },
+                      "Voice channel created."
+                    ).catch(console.error)
+                  }
+                  className="border border-sky-400/25 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-200"
                 >
                   Voice
                 </button>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
-            <h2 className="mb-5 text-xl font-bold">Roles</h2>
-
-            <div className="flex flex-wrap gap-2">
-              {data.roles.map((role) => (
-                <span
-                  key={role.id}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/75"
-                >
-                  {role.name}
-                </span>
-              ))}
-
-              {data.roles.length === 0 && (
-                <span className="text-sm text-white/50">No roles available.</span>
-              )}
+              </ActionRow>
             </div>
           </section>
         </div>
 
-        <div className="space-y-6">
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
-            <h2 className="mb-5 text-xl font-bold">Categories</h2>
+        <div className="space-y-5">
+          <EntityPanel title="Categories">
+            {data.categories.map((category) => (
+              <EditableRow
+                key={category.id}
+                label={category.name}
+                protectedState={category.protected}
+                onRename={(name) => renameCategory(selectedGuildId, category.id, { name })}
+                onProtect={() => protectCategory(selectedGuildId, category.id)}
+                onUnprotect={() => unprotectCategory(selectedGuildId, category.id)}
+                onDelete={() => deleteCategory(selectedGuildId, category.id)}
+                onComplete={() => loadSettings(selectedGuildId)}
+              />
+            ))}
+          </EntityPanel>
 
-            <div className="space-y-4">
-              {data.categories.map((category) => (
-                <CategoryCard
-                  key={category.id}
-                  guildId={selectedGuildId}
-                  categoryId={category.id}
-                  name={category.name}
-                  protectedState={category.protected}
-                  onRefresh={() => selectedGuildId && loadSettings(selectedGuildId)}
-                />
-              ))}
-
-              {data.categories.length === 0 && (
-                <div className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-white/60">
-                  No categories yet.
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl shadow-black/20">
-            <h2 className="mb-5 text-xl font-bold">Channels</h2>
-
-            <div className="space-y-4">
-              {data.channels.map((channel) => (
-                <ChannelCard
-                  key={channel.id}
-                  guildId={selectedGuildId}
-                  channelId={channel.id}
-                  name={channel.name}
-                  protectedState={channel.protected}
-                  categoryName={channel.categoryName}
-                  categories={data.categories}
-                  typeLabel={channel.type === 2 ? "voice" : "text"}
-                  onRefresh={() => selectedGuildId && loadSettings(selectedGuildId)}
-                />
-              ))}
-
-              {data.channels.length === 0 && (
-                <div className="rounded-2xl border border-white/10 bg-black/10 p-4 text-sm text-white/60">
-                  No channels yet.
-                </div>
-              )}
-            </div>
-          </section>
+          <EntityPanel title="Channels">
+            {data.channels.map((channel) => (
+              <EditableRow
+                key={channel.id}
+                label={channel.name}
+                subtitle={channel.categoryName || (channel.type === 2 ? "voice" : "text")}
+                protectedState={channel.protected}
+                onRename={(name) => renameChannel(selectedGuildId, channel.id, { name })}
+                onProtect={() => protectChannel(selectedGuildId, channel.id)}
+                onUnprotect={() => unprotectChannel(selectedGuildId, channel.id)}
+                onDelete={() => deleteChannel(selectedGuildId, channel.id)}
+                onComplete={() => loadSettings(selectedGuildId)}
+              />
+            ))}
+          </EntityPanel>
         </div>
       </div>
     </PanelLayout>
   );
 }
 
-function CategoryCard({
-  guildId,
-  categoryId,
-  name,
-  protectedState,
-  onRefresh,
-}: {
-  guildId: string;
-  categoryId: string;
-  name: string;
-  protectedState: boolean;
-  onRefresh: () => void;
-}) {
-  const [nextName, setNextName] = useState(name);
-
+function Notice({ tone, children }: { tone: "success" | "error"; children: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center">
-        <input
-          value={nextName}
-          onChange={(event) => setNextName(event.target.value)}
-          className="flex-1 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
-        />
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              renameCategory(guildId, categoryId, { name: nextName })
-                .then(onRefresh)
-                .catch(console.error)
-            }
-            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm"
-          >
-            Rename
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              (protectedState
-                ? unprotectCategory(guildId, categoryId)
-                : protectCategory(guildId, categoryId)
-              )
-                .then(onRefresh)
-                .catch(console.error)
-            }
-            className={`rounded-2xl border px-4 py-3 text-sm ${
-              protectedState
-                ? "border-yellow-400/20 bg-yellow-500/10 text-yellow-200"
-                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-            }`}
-          >
-            {protectedState ? "Unprotect" : "Protect"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              deleteCategory(guildId, categoryId)
-                .then(onRefresh)
-                .catch(console.error)
-            }
-            className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
+    <div
+      className={`mb-4 border px-4 py-3 text-sm ${
+        tone === "success"
+          ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+          : "border-rose-400/20 bg-rose-500/10 text-rose-200"
+      }`}
+    >
+      {children}
     </div>
   );
 }
 
-function ChannelCard({
-  guildId,
-  channelId,
-  name,
+function ActionRow({ children }: { children: ReactNode }) {
+  return <div className="flex gap-2">{children}</div>;
+}
+
+function Field({ label, value, onChange, readOnly }: { label: string; value: string; onChange?: (value: string) => void; readOnly?: boolean }) {
+  return (
+    <label className="border border-white/10 bg-black/10 p-4">
+      <span className="block text-sm text-white/55">{label}</span>
+      <input
+        value={value}
+        readOnly={readOnly}
+        onChange={(event) => onChange?.(event.target.value)}
+        className="mt-2 w-full bg-transparent text-lg font-semibold outline-none"
+      />
+    </label>
+  );
+}
+
+function ChannelSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ id: string; name: string }> }) {
+  return (
+    <label className="border border-white/10 bg-black/10 p-4">
+      <span className="block text-sm text-white/55">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full bg-transparent text-base font-semibold outline-none"
+      >
+        <option value="">Not configured</option>
+        {options.map((channel) => (
+          <option key={channel.id} value={channel.id} className="bg-[#111827]">
+            #{channel.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function EntityPanel({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border border-white/8 bg-white/[0.04] p-5 shadow-xl shadow-black/20">
+      <h2 className="mb-4 text-xl font-bold">{title}</h2>
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function EditableRow({
+  label,
+  subtitle,
   protectedState,
-  categoryName,
-  categories,
-  typeLabel,
-  onRefresh,
+  onRename,
+  onProtect,
+  onUnprotect,
+  onDelete,
+  onComplete,
 }: {
-  guildId: string;
-  channelId: string;
-  name: string;
+  label: string;
+  subtitle?: string | null;
   protectedState: boolean;
-  categoryName: string | null;
-  categories: Array<{ id: string; name: string }>;
-  typeLabel: string;
-  onRefresh: () => void;
+  onRename: (name: string) => Promise<unknown>;
+  onProtect: () => Promise<unknown>;
+  onUnprotect: () => Promise<unknown>;
+  onDelete: () => Promise<unknown>;
+  onComplete: () => Promise<unknown>;
 }) {
-  const [nextName, setNextName] = useState(name);
-  const [nextParentId, setNextParentId] = useState("");
+  const [nextName, setNextName] = useState(label);
+  const [busy, setBusy] = useState(false);
+
+  async function run(action: () => Promise<unknown>) {
+    try {
+      setBusy(true);
+      await action();
+      await onComplete();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/75">
-          {typeLabel}
-        </span>
-        <span className="text-xs text-white/45">
-          parent: {categoryName || "none"}
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <input
-          value={nextName}
-          onChange={(event) => setNextName(event.target.value)}
-          className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
-        />
-
-        <select
-          value={nextParentId}
-          onChange={(event) => setNextParentId(event.target.value)}
-          className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
-        >
-          <option value="">Keep / no category</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id} className="bg-[#111827]">
-              {category.name}
-            </option>
-          ))}
-        </select>
-
+    <div className="border border-white/10 bg-black/10 p-4">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+        <div className="min-w-0 flex-1">
+          <input
+            value={nextName}
+            onChange={(event) => setNextName(event.target.value)}
+            className="w-full border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none"
+          />
+          {subtitle && <p className="mt-2 text-xs text-white/45">{subtitle}</p>}
+        </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              renameChannel(guildId, channelId, {
-                name: nextName,
-                parentId: nextParentId || undefined,
-              })
-                .then(onRefresh)
-                .catch(console.error)
-            }
-            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm"
-          >
-            Rename
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              (protectedState
-                ? unprotectChannel(guildId, channelId)
-                : protectChannel(guildId, channelId)
-              )
-                .then(onRefresh)
-                .catch(console.error)
-            }
-            className={`rounded-2xl border px-4 py-3 text-sm ${
-              protectedState
-                ? "border-yellow-400/20 bg-yellow-500/10 text-yellow-200"
-                : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-            }`}
-          >
-            {protectedState ? "Unprotect" : "Protect"}
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              deleteChannel(guildId, channelId).then(onRefresh).catch(console.error)
-            }
-            className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
-          >
-            Delete
-          </button>
+          <button type="button" disabled={busy} onClick={() => run(() => onRename(nextName))} className="border border-white/10 bg-white/[0.05] px-4 py-3 text-sm">Rename</button>
+          <button type="button" disabled={busy} onClick={() => run(() => (protectedState ? onUnprotect() : onProtect()))} className="border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{protectedState ? "Unprotect" : "Protect"}</button>
+          <button type="button" disabled={busy} onClick={() => run(onDelete)} className="border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">Delete</button>
         </div>
       </div>
     </div>
