@@ -77,7 +77,11 @@ const client = new Client({
   ],
 });
 
-const PREFIX = process.env.PREFIX || "!";
+const prefixRef = { current: process.env.PREFIX || "!" };
+
+function getPrefixForGuild() {
+  return prefixRef.current || "!";
+}
 const DATA_FILE = path.join(__dirname, "punishments.json");
 const PROTECT_FILE = path.join(__dirname, "protection.json");
 const BAN_LOG_CHANNEL_NAME = "┃🪄・бан";
@@ -2336,7 +2340,8 @@ client.on("messageCreate", async (message) => {
 
   const guildId = message.guild.id;
   const userId = message.author.id;
-  const isCommandMessage = message.content.startsWith(PREFIX);
+  const commandPrefix = getPrefixForGuild(message.guild?.id);
+  const isCommandMessage = message.content.startsWith(commandPrefix);
 
   if (!isCommandMessage) {
     const autoBanned = await handleThirdPartyLinkAutoBan(message);
@@ -2364,7 +2369,7 @@ client.on("messageCreate", async (message) => {
 
   if (!isCommandMessage) return;
 
-  const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+  const args = message.content.slice(commandPrefix.length).trim().split(/\s+/);
   const command = (args.shift() || "").toLowerCase();
   const moderator = isModerator(message.member);
 
@@ -3928,11 +3933,19 @@ if (command === "n") {
 
 
 attachDashboardBridge(client, {
-  prefix: PREFIX,
+  prefixRef,
   rankDb,
   modulesRef: runtimeModules,
   protectionRef: protection,
   protectionFilePath: PROTECT_FILE,
+  punishmentsDataRef: data,
+  punishmentsFilePath: DATA_FILE,
+  systemConfigRef: {
+    welcomeChannelId: process.env.WELCOME_CHANNEL_ID || "",
+    logResultsChannelId: process.env.LOG_RESULTS_CHANNEL_ID || "",
+    rulesCheckChannelId: process.env.RULES_CHECK_CHANNEL_ID || "",
+    getAccessChannelId: process.env.GET_ACCESS_CHANNEL_ID || "",
+  },
 });
 
 
