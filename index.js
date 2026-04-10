@@ -3920,7 +3920,7 @@ attachDashboardBridge(client, {
 // Login
 // =============================
 
-startFormsRelay(client);
+//startFormsRelay(client);
 client.login(process.env.TOKEN);
 
 // Load allowlist override if present
