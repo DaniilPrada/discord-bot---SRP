@@ -1,6 +1,6 @@
 // index.js
 // Discord moderation + rank + utility + music bot (RU messages)
-1
+
 process.on("unhandledRejection", (err) => {
   console.error("UNHANDLED REJECTION:", err);
 });
